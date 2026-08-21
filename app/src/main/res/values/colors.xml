@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="td_forest">#2E4A34</color>
+    <color name="td_forest_dark">#223626</color>
+    <color name="td_forest_tint">#E4EEE4</color>
+    <color name="td_accent">#E07B39</color>
+    <color name="td_accent_tint">#FBE8D8</color>
+    <color name="td_bg_paper">#FAF8F4</color>
+    <color name="td_surface">#FEFCF9</color>
+    <color name="td_ink">#232B25</color>
+    <color name="td_ink_muted">#6B756C</color>
+    <color name="td_border">#DDD8CC</color>
+    <color name="td_cream">#FAF6EE</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+</resources>

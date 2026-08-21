@@ -1,0 +1,13 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme (Compose owns the real theming; this is just the window/splash chrome). -->
+    <style name="Theme.TDAid" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/td_forest</item>
+        <item name="colorPrimaryVariant">@color/td_forest_dark</item>
+        <item name="colorOnPrimary">@color/td_cream</item>
+        <item name="colorSecondary">@color/td_accent</item>
+        <item name="colorSecondaryVariant">@color/td_accent</item>
+        <item name="colorOnSecondary">@color/td_forest_dark</item>
+        <item name="android:statusBarColor">@color/td_forest</item>
+        <item name="android:windowBackground">@color/td_forest_dark</item>
+    </style>
+</resources>

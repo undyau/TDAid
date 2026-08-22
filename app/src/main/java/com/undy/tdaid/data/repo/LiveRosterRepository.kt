@@ -49,7 +49,7 @@ class RealLiveRosterRepository(private val pdgaRepository: PdgaRepository) : Liv
                 val groups = results
                     .groupBy { it.teeTime }
                     .entries
-                    .sortedBy { it.key }
+                    .sortedWith(compareBy({ it.key.isEmpty() }, { it.key }))
                     .map { (teeTime, players) ->
                         TeeGroup(
                             time = teeTime.ifEmpty { "TBD" },

@@ -48,6 +48,7 @@ import com.undy.tdaid.data.local.BioNote
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.repo.AdgRepository
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.AdgLiveState
@@ -72,11 +73,16 @@ import kotlinx.coroutines.launch
 class BioEditorViewModel(
     private val playerId: String,
     tournamentRepository: TournamentRepository,
+    liveRosterRepository: LiveRosterRepository,
     private val bioNotesRepository: BioNotesRepository,
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
 ) : ViewModel() {
-    val player: Player? = tournamentRepository.teeGroups().flatMap { it.players }.find { it.id == playerId }
+    // A player might be a demo starter or a real one loaded from PDGA Live on Roster/Field Mode
+    // — check both, since this screen can be reached from either.
+    val player: Player? = (tournamentRepository.teeGroups() + liveRosterRepository.current.value?.groups.orEmpty())
+        .flatMap { it.players }
+        .find { it.id == playerId }
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
 
     var pronunciation by mutableStateOf("")
@@ -149,12 +155,36 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
         BioEditorViewModel(
             playerId,
             ServiceLocator.tournamentRepository,
+            ServiceLocator.liveRosterRepository,
             ServiceLocator.bioNotesRepository,
             ServiceLocator.pdgaRepository,
             ServiceLocator.adgRepository,
         )
     }
-    val player = vm.player ?: return
+    val player = vm.player
+    if (player == null) {
+        Column(
+            Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
+                .windowInsetsPadding(WindowInsets.systemBars),
+        ) {
+            Row(
+                Modifier.fillMaxWidth().background(Forest).padding(horizontal = 16.dp, vertical = 15.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Cream)
+                }
+                Text("Edit Player Bio", color = Cream, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp))
+            }
+            Text(
+                "This player isn't in the roster currently loaded — go back and reopen their card.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                color = InkMuted,
+                modifier = Modifier.padding(20.dp),
+            )
+        }
+        return
+    }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -278,8 +308,8 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
 }
 
 /** Explicit, per-player button that hits the real PDGA API (if logged in) and the real ADG Tour
- *  leaderboard. A PDGA name mismatch is surfaced rather than silently trusted, since this
- *  player's PDGA number is a demo placeholder, not necessarily their real assigned number. */
+ *  leaderboard. A PDGA name mismatch is surfaced rather than silently trusted, since a demo
+ *  player's PDGA number is a placeholder, not necessarily their real assigned number. */
 @Composable
 private fun LiveDataSection(
     player: Player,

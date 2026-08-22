@@ -496,7 +496,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             val groups = vm.liveLookupResults
                                 .groupBy { it.teeTime }
                                 .entries
-                                .sortedBy { it.key }
+                                .sortedWith(compareBy({ it.key.isEmpty() }, { it.key }))
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 groups.forEach { (teeTime, players) ->
                                     Column(

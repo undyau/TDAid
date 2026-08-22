@@ -40,6 +40,13 @@ object NotificationHelper {
     }
 
     fun notifyAnnounceNow(context: Context, group: TeeGroup) {
+        notifyAnnounceNow(context, group.time, group.players.joinToString(", ") { it.name })
+    }
+
+    /** Takes plain strings (not a [TeeGroup]) so a [android.content.BroadcastReceiver] woken by
+     *  AlarmManager — possibly with the app process not even running — can call this using only
+     *  what was packed into the alarm's Intent extras. */
+    fun notifyAnnounceNow(context: Context, time: String, namesJoined: String) {
         if (!hasPermission(context)) return
 
         val openIntent = android.content.Intent(context, MainActivity::class.java).apply {
@@ -50,12 +57,11 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val names = group.players.joinToString(", ") { it.name }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Announce now · ${group.time}")
-            .setContentText(names)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(names))
+            .setContentTitle("Announce now · $time")
+            .setContentText(namesJoined)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(namesJoined))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
@@ -63,6 +69,6 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .build()
 
-        NotificationManagerCompat.from(context).notify(group.time.hashCode(), notification)
+        NotificationManagerCompat.from(context).notify(time.hashCode(), notification)
     }
 }

@@ -36,12 +36,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -50,6 +52,7 @@ import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.RoundStatRow
@@ -65,6 +68,7 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.flow.first
 
 class NowAnnouncingViewModel(tournamentRepository: TournamentRepository) : ViewModel() {
     val groups: List<TeeGroup> = tournamentRepository.teeGroups()
@@ -89,6 +93,14 @@ private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min"
 @Composable
 fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     val vm = rememberViewModel { NowAnnouncingViewModel(ServiceLocator.tournamentRepository) }
+    val context = LocalContext.current
+
+    // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
+    // the TD backgrounds or fully closes the app once the round is underway.
+    LaunchedEffect(Unit) {
+        val intervalMinutes = ServiceLocator.settingsRepository.settings.first().announceIntervalMin
+        TeeAlarmScheduler.scheduleAll(context.applicationContext, vm.groups, intervalMinutes)
+    }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)

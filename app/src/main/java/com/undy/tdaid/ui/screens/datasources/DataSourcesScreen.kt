@@ -45,6 +45,7 @@ import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
 import com.undy.tdaid.data.repo.PdgaRepository
+import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
@@ -92,6 +93,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
     }
     val settings by vm.settings.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -222,6 +224,52 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                     )
                     IconButton(onClick = { vm.syncNow(); nowTick = System.currentTimeMillis() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Sync now", tint = ForestDark, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            item {
+                Column {
+                    SectionLabel("Tee-Time Alerts", modifier = Modifier.padding(bottom = 8.dp))
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        var exactAlarmsAllowed by remember { mutableStateOf(TeeAlarmScheduler.canScheduleExact(context)) }
+                        if (!exactAlarmsAllowed) {
+                            Text(
+                                "Exact alarms aren't allowed yet — alerts will still fire, just without a tight timing guarantee.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = InkMuted,
+                            )
+                            OutlineButton(
+                                text = "Allow Exact Alarms",
+                                onClick = {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                                        .setData(android.net.Uri.parse("package:${context.packageName}"))
+                                    context.startActivity(intent)
+                                },
+                            )
+                        } else {
+                            Text(
+                                "Exact alarms are allowed — tee-time alerts will fire on time even if the app is closed.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = InkMuted,
+                            )
+                        }
+                        var testSent by remember { mutableStateOf(false) }
+                        OutlineButton(
+                            text = if (testSent) "Test alert sent — check in ~15s" else "Send Test Alert",
+                            onClick = {
+                                TeeAlarmScheduler.scheduleTestAlert(context.applicationContext)
+                                testSent = true
+                            },
+                        )
+                        Text(
+                            "Verify sound & vibration work on this phone — try closing the app after sending.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = InkMuted,
+                        )
                     }
                 }
             }

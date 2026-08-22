@@ -7,10 +7,10 @@ import com.undy.tdaid.data.local.RoomBioNotesRepository
 import com.undy.tdaid.data.prefs.DataStoreSettingsRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
-import com.undy.tdaid.data.repo.FakeAdgRepository
-import com.undy.tdaid.data.repo.FakePdgaRepository
 import com.undy.tdaid.data.repo.FakeTournamentRepository
 import com.undy.tdaid.data.repo.PdgaRepository
+import com.undy.tdaid.data.repo.RealAdgRepository
+import com.undy.tdaid.data.repo.RealPdgaRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 
 /**
@@ -27,8 +27,8 @@ object ServiceLocator {
     fun init(context: Context) {
         if (::tournamentRepository.isInitialized) return
         tournamentRepository = FakeTournamentRepository()
-        pdgaRepository = FakePdgaRepository()
-        adgRepository = FakeAdgRepository()
+        pdgaRepository = RealPdgaRepository()
+        adgRepository = RealAdgRepository()
         settingsRepository = DataStoreSettingsRepository(context.applicationContext)
         bioNotesRepository = RoomBioNotesRepository(AppDatabase.get(context).bioNoteDao())
     }

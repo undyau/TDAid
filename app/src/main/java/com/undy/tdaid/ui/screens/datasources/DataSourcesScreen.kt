@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -43,6 +47,8 @@ import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
+import com.undy.tdaid.data.remote.AdgLeaderboardRow
+import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.repo.AdgRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
@@ -53,6 +59,8 @@ import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
+import com.undy.tdaid.ui.theme.Accent
+import com.undy.tdaid.ui.theme.AccentTint
 import com.undy.tdaid.ui.theme.Cream
 import com.undy.tdaid.ui.theme.Forest
 import com.undy.tdaid.ui.theme.ForestDark
@@ -72,7 +80,31 @@ class DataSourcesViewModel(
 ) : ViewModel() {
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
-    fun setPdgaConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setPdgaConnected(v) }
+    var pdgaLoggedIn by mutableStateOf(pdgaRepository.isLoggedIn)
+        private set
+    var pdgaUsername by mutableStateOf(pdgaRepository.loggedInAs)
+        private set
+    var pdgaLoginInProgress by mutableStateOf(false)
+        private set
+    var pdgaLoginError by mutableStateOf<String?>(null)
+        private set
+
+    var pdgaLookupInProgress by mutableStateOf(false)
+        private set
+    var pdgaLookupResult by mutableStateOf<PdgaPlayerResult?>(null)
+        private set
+    var pdgaLookupError by mutableStateOf<String?>(null)
+        private set
+
+    var adgLookupInProgress by mutableStateOf(false)
+        private set
+    var adgLookupResult by mutableStateOf<AdgLeaderboardRow?>(null)
+        private set
+    var adgLookupNotFound by mutableStateOf(false)
+        private set
+    var adgLookupError by mutableStateOf<String?>(null)
+        private set
+
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setSync(ratings: Boolean? = null, results: Boolean? = null, membership: Boolean? = null, bios: Boolean? = null) =
@@ -83,6 +115,57 @@ class DataSourcesViewModel(
         pdgaRepository.syncNow()
         adgRepository.syncNow()
         settingsRepository.markSyncedNow()
+    }
+
+    fun loginPdga(username: String, password: String) {
+        pdgaLoginInProgress = true
+        pdgaLoginError = null
+        viewModelScope.launch {
+            pdgaRepository.login(username, password)
+                .onSuccess {
+                    pdgaLoggedIn = true
+                    pdgaUsername = pdgaRepository.loggedInAs
+                    settingsRepository.setPdgaConnected(true)
+                }
+                .onFailure { e -> pdgaLoginError = e.message ?: "Login failed" }
+            pdgaLoginInProgress = false
+        }
+    }
+
+    fun logoutPdga() {
+        pdgaRepository.logout()
+        pdgaLoggedIn = false
+        pdgaUsername = null
+        pdgaLookupResult = null
+        pdgaLookupError = null
+        viewModelScope.launch { settingsRepository.setPdgaConnected(false) }
+    }
+
+    fun lookupPdgaPlayer(pdgaNumber: String) {
+        pdgaLookupInProgress = true
+        pdgaLookupError = null
+        pdgaLookupResult = null
+        viewModelScope.launch {
+            pdgaRepository.lookupPlayer(pdgaNumber)
+                .onSuccess { player ->
+                    if (player == null) pdgaLookupError = "No player found for #$pdgaNumber" else pdgaLookupResult = player
+                }
+                .onFailure { e -> pdgaLookupError = e.message ?: "Lookup failed" }
+            pdgaLookupInProgress = false
+        }
+    }
+
+    fun lookupAdgPlayer(name: String) {
+        adgLookupInProgress = true
+        adgLookupError = null
+        adgLookupResult = null
+        adgLookupNotFound = false
+        viewModelScope.launch {
+            adgRepository.lookupPlayerByName(name)
+                .onSuccess { row -> if (row == null) adgLookupNotFound = true else adgLookupResult = row }
+                .onFailure { e -> adgLookupError = e.message ?: "Lookup failed" }
+            adgLookupInProgress = false
+        }
     }
 }
 
@@ -121,32 +204,58 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                 Column {
                     SectionLabel("Primary Source", modifier = Modifier.padding(bottom = 8.dp))
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(14.dp)) {
-                        if (settings.pdgaConnected) {
+                        if (vm.pdgaLoggedIn) {
                             ConnectionHeader(
                                 icon = Icons.Filled.Link,
                                 connected = true,
                                 title = "Connected to PDGA",
-                                subtitle = "Linked as Ridge Valley Disc Golf Club · TD #4471",
+                                subtitle = "Logged in as ${vm.pdgaUsername}",
                             )
-                            TextButton(onClick = { vm.setPdgaConnected(false) }, contentPadding = PaddingValues(0.dp)) {
+                            TextButton(onClick = vm::logoutPdga, contentPadding = PaddingValues(0.dp)) {
                                 Text("Disconnect", style = MaterialTheme.typography.titleSmall, color = InkMuted)
                             }
-                            Spacer(Modifier.width(0.dp))
-                            EventLine()
                         } else {
                             ConnectionHeader(
                                 icon = Icons.Filled.Link,
                                 connected = false,
                                 title = "Not connected",
-                                subtitle = "Connect your club's PDGA account to pull ratings, results and bios automatically.",
+                                subtitle = "Log in with your real PDGA membership to pull ratings, results and bios — this hits the actual PDGA REST API.",
                             )
-                            PrimaryButton(text = "Connect to PDGA", onClick = { vm.setPdgaConnected(true) }, modifier = Modifier.padding(top = 12.dp))
+                            var username by remember { mutableStateOf("") }
+                            var password by remember { mutableStateOf("") }
+                            Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = username,
+                                    onValueChange = { username = it },
+                                    label = { Text("PDGA username") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                                )
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = { password = it },
+                                    label = { Text("PDGA password") },
+                                    singleLine = true,
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                                )
+                                if (vm.pdgaLoginError != null) {
+                                    Text(vm.pdgaLoginError!!, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                                }
+                                PrimaryButton(
+                                    text = if (vm.pdgaLoginInProgress) "Logging in…" else "Log In to PDGA",
+                                    onClick = { vm.loginPdga(username, password) },
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            if (settings.pdgaConnected) {
+            if (vm.pdgaLoggedIn) {
                 item {
                     Column {
                         SectionLabel("Sync from PDGA", modifier = Modifier.padding(bottom = 4.dp))
@@ -155,6 +264,56 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             ToggleRow("Recent results", "Last 3 sanctioned events per player", settings.syncResults, { vm.setSync(results = it) })
                             ToggleRow("Membership date", "Year each player joined the PDGA", settings.syncMembership, { vm.setSync(membership = it) })
                             ToggleRow("Player bios", "Short auto-generated summary per card", settings.syncBios, { vm.setSync(bios = it) })
+                        }
+                    }
+                }
+
+                item {
+                    Column {
+                        SectionLabel("Look Up a Real PDGA Player", modifier = Modifier.padding(bottom = 8.dp))
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            var pdgaNumber by remember { mutableStateOf("") }
+                            OutlinedTextField(
+                                value = pdgaNumber,
+                                onValueChange = { pdgaNumber = it },
+                                label = { Text("PDGA number") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                            )
+                            OutlineButton(
+                                text = if (vm.pdgaLookupInProgress) "Looking up…" else "Look Up",
+                                onClick = { vm.lookupPdgaPlayer(pdgaNumber) },
+                            )
+                            vm.pdgaLookupError?.let {
+                                Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                            }
+                            vm.pdgaLookupResult?.let { player ->
+                                Column(
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ForestTint).padding(12.dp),
+                                ) {
+                                    Text(
+                                        "${player.firstName} ${player.lastName} · #${player.pdgaNumber}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = ForestDark,
+                                    )
+                                    Text(
+                                        "Rating ${player.rating ?: "—"} · ${player.membershipStatus} member" +
+                                            (player.city?.let { c -> " · $c, ${player.stateProv ?: player.country ?: ""}" } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                        color = InkMuted,
+                                    )
+                                }
+                            }
+                            Text(
+                                "Real data from api.pdga.com — try your own PDGA number.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = InkMuted,
+                            )
                         }
                     }
                 }
@@ -191,6 +350,61 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             )
                             OutlineButton(text = "Connect to ADG Tour", onClick = { vm.setAdgConnected(true) }, modifier = Modifier.padding(top = 14.dp))
                         }
+                    }
+                }
+            }
+
+            item {
+                Column {
+                    SectionLabel("Look Up a Real ADG Tour Player", modifier = Modifier.padding(bottom = 8.dp))
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        var playerName by remember { mutableStateOf("") }
+                        OutlinedTextField(
+                            value = playerName,
+                            onValueChange = { playerName = it },
+                            label = { Text("Player name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                        )
+                        OutlineButton(
+                            text = if (vm.adgLookupInProgress) "Looking up…" else "Look Up",
+                            onClick = { vm.lookupAdgPlayer(playerName) },
+                        )
+                        vm.adgLookupError?.let {
+                            Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                        }
+                        if (vm.adgLookupNotFound) {
+                            Text(
+                                "Not found in the current ADG Tour standings.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = InkMuted,
+                            )
+                        }
+                        vm.adgLookupResult?.let { row ->
+                            Column(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(AccentTint).padding(12.dp),
+                            ) {
+                                Text(
+                                    "${row.name} · #${row.rank} in ${row.division}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = ForestDark,
+                                )
+                                Text(
+                                    "ADG #${row.adgNumber} · ${row.points} pts · ${row.eventsPlayed} events (best 6 counted)",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = InkMuted,
+                                )
+                            }
+                        }
+                        Text(
+                            "Real data scraped live from australiandiscgolf.com/leaderboard — no login needed. Try a name from the current standings, e.g. \"Jade Brady\".",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = InkMuted,
+                        )
                     }
                 }
             }
@@ -296,16 +510,5 @@ private fun ConnectionHeader(
             Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp), color = Ink)
             Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
         }
-    }
-}
-
-@Composable
-private fun EventLine() {
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("Ridge Valley Open · Event #58392", style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp), color = Ink)
-            Text("Aug 21–23, 2026 · 4 divisions linked", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
-        }
-        Text("Change", style = MaterialTheme.typography.titleSmall, color = ForestDark)
     }
 }

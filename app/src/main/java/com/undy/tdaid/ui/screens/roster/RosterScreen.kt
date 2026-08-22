@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,14 +48,20 @@ import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
+import com.undy.tdaid.data.prefs.AppSettings
+import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
+import com.undy.tdaid.data.repo.LiveRoster
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.AdgLiveState
 import com.undy.tdaid.ui.PdgaLiveState
 import com.undy.tdaid.ui.components.AdgLine
+import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.RoundStatRow
+import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.AccentTint
@@ -67,16 +74,38 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class RosterViewModel(
+    private val divisionCode: String,
     tournamentRepository: TournamentRepository,
+    private val settingsRepository: SettingsRepository,
+    private val liveRosterRepository: LiveRosterRepository,
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
 ) : ViewModel() {
-    val groups: List<TeeGroup> = tournamentRepository.teeGroups()
-    val totalPlayers: Int = groups.sumOf { it.players.size }
+    private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
+    val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+    val liveRoster: StateFlow<LiveRoster?> = liveRosterRepository.current
+    val liveLoading: StateFlow<Boolean> = liveRosterRepository.loading
+    val liveError: StateFlow<String?> = liveRosterRepository.error
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
+
+    var round by mutableStateOf(1)
+        private set
+
+    fun changeRound(r: Int) { round = r.coerceIn(1, 20) }
+
+    fun groupsFor(live: LiveRoster?): List<TeeGroup> =
+        if (live != null && live.division == divisionCode) live.groups else demoGroups
+
+    fun loadRealRoster() {
+        val tournamentId = settings.value.selectedTournamentId ?: return
+        viewModelScope.launch { liveRosterRepository.load(tournamentId, divisionCode, round) }
+    }
 
     private val pdgaLiveMap = mutableStateMapOf<String, PdgaLiveState>()
     private val adgLiveMap = mutableStateMapOf<String, AdgLiveState>()
@@ -109,9 +138,24 @@ class RosterViewModel(
 @Composable
 fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -> Unit) {
     val vm = rememberViewModel {
-        RosterViewModel(ServiceLocator.tournamentRepository, ServiceLocator.pdgaRepository, ServiceLocator.adgRepository)
+        RosterViewModel(
+            divisionCode,
+            ServiceLocator.tournamentRepository,
+            ServiceLocator.settingsRepository,
+            ServiceLocator.liveRosterRepository,
+            ServiceLocator.pdgaRepository,
+            ServiceLocator.adgRepository,
+        )
     }
     var expandedId by remember { mutableStateOf<String?>(null) }
+    val settings by vm.settings.collectAsState()
+    val liveRoster by vm.liveRoster.collectAsState()
+    val liveLoading by vm.liveLoading.collectAsState()
+    val liveError by vm.liveError.collectAsState()
+    val activeLiveRoster = liveRoster
+    val groups = vm.groupsFor(activeLiveRoster)
+    val isLive = activeLiveRoster != null && activeLiveRoster.division == divisionCode
+    val totalPlayers = groups.sumOf { it.players.size }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -125,8 +169,12 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Cream)
             }
             Column {
-                Text("$divisionCode · Round 2 Starters", color = Cream, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp))
-                Text("${vm.totalPlayers} players", color = Cream.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                Text(
+                    "$divisionCode · " + (if (isLive) "Round ${activeLiveRoster.round} Starters (Live)" else "Round 2 Starters"),
+                    color = Cream,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp),
+                )
+                Text("$totalPlayers players", color = Cream.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
             }
         }
 
@@ -135,7 +183,42 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            vm.groups.forEach { group ->
+            if (settings.selectedTournamentId != null && !isLive) {
+                item {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            "Real PDGA event selected",
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
+                            color = Ink,
+                        )
+                        Text(
+                            "Load real starters & tee times for $divisionCode from PDGA Live — the demo roster below is shown until then.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = InkMuted,
+                        )
+                        StepperRow(
+                            label = "Round",
+                            subtitle = "Which round to load",
+                            value = vm.round,
+                            unit = "",
+                            onDecrement = { vm.changeRound(vm.round - 1) },
+                            onIncrement = { vm.changeRound(vm.round + 1) },
+                        )
+                        OutlineButton(
+                            text = if (liveLoading) "Loading…" else "Load Real Starters & Tee Times",
+                            onClick = vm::loadRealRoster,
+                        )
+                        liveError?.let {
+                            Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                        }
+                    }
+                }
+            }
+
+            groups.forEach { group ->
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

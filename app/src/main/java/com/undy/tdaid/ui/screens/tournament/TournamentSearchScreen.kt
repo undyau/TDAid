@@ -196,7 +196,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
                     Spacer(Modifier.width(0.dp))
                     OutlineButton(text = "Use Demo Tournament (Ridge Valley Open)", onClick = { vm.useDemoTournament(onBack) })
                     Text(
-                        "Picking a real event updates its name, dates and location on the dashboard — the starters, tee times and schedule stay demo data, since PDGA doesn't expose start lists through this API.",
+                        "Picking a real event updates its name, dates and location on the dashboard. Open a division from there to load its real starters & tee times from PDGA Live.",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = InkMuted,
                     )

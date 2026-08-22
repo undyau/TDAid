@@ -37,9 +37,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +53,7 @@ import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.asScoreLabel
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
@@ -68,21 +71,35 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
-class NowAnnouncingViewModel(tournamentRepository: TournamentRepository) : ViewModel() {
-    val groups: List<TeeGroup> = tournamentRepository.teeGroups()
+/** Shares whichever roster Roster last loaded for this division (real, once a TD loads it there
+ *  — else the demo sample), so Setup's roster view and Field Mode's live announce queue always
+ *  agree, exactly like the original demo-only design did. */
+class NowAnnouncingViewModel(
+    divisionCode: String,
+    tournamentRepository: TournamentRepository,
+    liveRosterRepository: LiveRosterRepository,
+) : ViewModel() {
+    private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
+    val groups = liveRosterRepository.current
+        .map { live -> if (live != null && live.division == divisionCode) live.groups else demoGroups }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
+
     var currentIndex by mutableStateOf(0)
         private set
     var bioPlayerId by mutableStateOf<String?>(null)
         private set
 
-    val current: TeeGroup? get() = groups.getOrNull(currentIndex)
-    val onDeck: List<TeeGroup> get() = groups.drop(currentIndex + 1).take(3)
-    val done: Boolean get() = currentIndex >= groups.size - 1
-    val bioPlayer: Player? get() = groups.flatMap { it.players }.find { it.id == bioPlayerId }
+    fun current(groups: List<TeeGroup>): TeeGroup? = groups.getOrNull(currentIndex)
+    fun onDeck(groups: List<TeeGroup>): List<TeeGroup> = groups.drop(currentIndex + 1).take(3)
+    fun done(groups: List<TeeGroup>): Boolean = currentIndex >= groups.size - 1
+    fun bioPlayer(groups: List<TeeGroup>): Player? = groups.flatMap { it.players }.find { it.id == bioPlayerId }
 
-    fun advance() { if (!done) currentIndex++ }
+    fun advance(groups: List<TeeGroup>) { if (!done(groups)) currentIndex++ }
     fun openBio(id: String) { bioPlayerId = id }
     fun closeBio() { bioPlayerId = null }
 }
@@ -91,15 +108,19 @@ private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
-    val vm = rememberViewModel { NowAnnouncingViewModel(ServiceLocator.tournamentRepository) }
+fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
+    val vm = rememberViewModel {
+        NowAnnouncingViewModel(divisionCode, ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository)
+    }
     val context = LocalContext.current
+    val groups by vm.groups.collectAsState()
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
-    // the TD backgrounds or fully closes the app once the round is underway.
-    LaunchedEffect(Unit) {
+    // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
+    // roster changes (e.g. a real load finishes while this screen is open).
+    LaunchedEffect(groups) {
         val intervalMinutes = ServiceLocator.settingsRepository.settings.first().announceIntervalMin
-        TeeAlarmScheduler.scheduleAll(context.applicationContext, vm.groups, intervalMinutes)
+        TeeAlarmScheduler.scheduleAll(context.applicationContext, groups, intervalMinutes)
     }
 
     Column(
@@ -120,7 +141,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                 Text("Offline · cached 7:42 AM", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = InkMuted)
             }
             Spacer(Modifier.width(8.dp))
-            Text("MPO · RD 2", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
+            Text("$divisionCode · RD 2", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenAlert) {
                 Icon(Icons.Filled.Notifications, contentDescription = "Tee-time alert", tint = ForestDark, modifier = Modifier.size(19.dp))
             }
@@ -134,14 +155,14 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            val current = vm.current
+            val current = vm.current(groups)
             if (current != null) {
                 item {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Forest).padding(19.dp)) {
                         Text("NOW ANNOUNCING", color = Accent, style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp))
                         Text(current.time, color = Cream, style = MaterialTheme.typography.headlineLarge)
                         Text(
-                            if (vm.done) "Final card of the division" else "Announcing now · 3 min before start",
+                            if (vm.done(groups)) "Final card of the division" else "Announcing now · 3 min before start",
                             color = Cream.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             modifier = Modifier.padding(top = 2.dp, bottom = 13.dp),
@@ -169,7 +190,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             }
 
             item {
-                if (vm.done) {
+                if (vm.done(groups)) {
                     Text(
                         "All groups announced for this division ✓",
                         color = ForestDark,
@@ -180,7 +201,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                 } else {
                     PrimaryButton(
                         text = "Mark Announced · Next Group",
-                        onClick = vm::advance,
+                        onClick = { vm.advance(groups) },
                         trailing = {
                             Spacer(Modifier.width(7.dp))
                             Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = ForestDark, modifier = Modifier.size(16.dp))
@@ -193,7 +214,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                 Column {
                     SectionLabel("On Deck", modifier = Modifier.padding(bottom = 9.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        vm.onDeck.forEachIndexed { index, group ->
+                        vm.onDeck(groups).forEachIndexed { index, group ->
                             OnDeckRow(group = group, countdown = onDeckCountdownLabels.getOrElse(index) { "" }, urgent = index == 0, onPlayerClick = vm::openBio)
                         }
                     }
@@ -202,7 +223,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
         }
     }
 
-    val bioPlayer = vm.bioPlayer
+    val bioPlayer = vm.bioPlayer(groups)
     if (bioPlayer != null) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(onDismissRequest = vm::closeBio, sheetState = sheetState, containerColor = SurfaceColor) {

@@ -96,7 +96,7 @@ class DashboardViewModel(
 
 @Composable
 fun RoundDashboardScreen(
-    onEnterFieldMode: () -> Unit,
+    onEnterFieldMode: (String) -> Unit,
     onOpenDataSources: () -> Unit,
     onOpenRoster: (String) -> Unit,
     onSelectTournament: () -> Unit,
@@ -154,7 +154,7 @@ fun RoundDashboardScreen(
                     }
                     if (realTournament) {
                         Text(
-                            "Real PDGA event · starters/schedule below are still demo data",
+                            "Real PDGA event · open a division to load its real starters & tee times",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
                             color = InkMuted,
                             modifier = Modifier.padding(top = 5.dp, start = 4.dp),
@@ -215,7 +215,7 @@ fun RoundDashboardScreen(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton(text = "Enter Field Mode", onClick = onEnterFieldMode)
+                    PrimaryButton(text = "Enter Field Mode", onClick = { onEnterFieldMode(vm.selectedDivision) })
                     Text(
                         "Downloads tee times, ratings & bios for offline use",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),

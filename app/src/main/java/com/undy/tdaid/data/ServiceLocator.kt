@@ -8,8 +8,10 @@ import com.undy.tdaid.data.prefs.DataStoreSettingsRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
 import com.undy.tdaid.data.repo.FakeTournamentRepository
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.data.repo.RealAdgRepository
+import com.undy.tdaid.data.repo.RealLiveRosterRepository
 import com.undy.tdaid.data.repo.RealPdgaRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 
@@ -21,6 +23,7 @@ object ServiceLocator {
     lateinit var tournamentRepository: TournamentRepository private set
     lateinit var pdgaRepository: PdgaRepository private set
     lateinit var adgRepository: AdgRepository private set
+    lateinit var liveRosterRepository: LiveRosterRepository private set
     lateinit var settingsRepository: SettingsRepository private set
     lateinit var bioNotesRepository: BioNotesRepository private set
 
@@ -29,6 +32,7 @@ object ServiceLocator {
         tournamentRepository = FakeTournamentRepository()
         pdgaRepository = RealPdgaRepository()
         adgRepository = RealAdgRepository()
+        liveRosterRepository = RealLiveRosterRepository(pdgaRepository)
         settingsRepository = DataStoreSettingsRepository(context.applicationContext)
         bioNotesRepository = RoomBioNotesRepository(AppDatabase.get(context).bioNoteDao())
     }

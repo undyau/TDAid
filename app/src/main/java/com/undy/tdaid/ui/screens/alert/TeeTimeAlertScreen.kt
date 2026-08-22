@@ -41,11 +41,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.notify.NotificationHelper
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
@@ -58,7 +60,10 @@ import kotlinx.coroutines.launch
 enum class AlertPhase { COUNTING, FIRING, CONFIRMED }
 private const val TOTAL_SECONDS = 165
 
-class TeeTimeAlertViewModel(tournamentRepository: TournamentRepository) : ViewModel() {
+class TeeTimeAlertViewModel(
+    application: Application,
+    tournamentRepository: TournamentRepository,
+) : AndroidViewModel(application) {
     val groups: List<TeeGroup> = tournamentRepository.teeGroups()
     var groupIndex by mutableIntStateOf(0)
         private set
@@ -75,7 +80,10 @@ class TeeTimeAlertViewModel(tournamentRepository: TournamentRepository) : ViewMo
                 delay(1000)
                 if (phase == AlertPhase.COUNTING) {
                     secondsLeft = (secondsLeft - 15).coerceAtLeast(0)
-                    if (secondsLeft <= 0) phase = AlertPhase.FIRING
+                    if (secondsLeft <= 0) {
+                        phase = AlertPhase.FIRING
+                        NotificationHelper.notifyAnnounceNow(getApplication(), currentGroup)
+                    }
                 }
             }
         }
@@ -98,10 +106,23 @@ class TeeTimeAlertViewModel(tournamentRepository: TournamentRepository) : ViewMo
 
 @Composable
 fun TeeTimeAlertScreen() {
-    val vm = rememberViewModel { TeeTimeAlertViewModel(ServiceLocator.tournamentRepository) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val application = context.applicationContext as Application
+    val vm = rememberViewModel { TeeTimeAlertViewModel(application, ServiceLocator.tournamentRepository) }
     val group = vm.currentGroup
     val fraction = vm.secondsLeft.toFloat() / TOTAL_SECONDS
     val firing = vm.phase == AlertPhase.FIRING
+
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { }
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            !NotificationHelper.hasPermission(context)
+        ) {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().background(Forest).windowInsetsPadding(WindowInsets.systemBars),

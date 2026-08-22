@@ -88,8 +88,9 @@ object TeeAlarmScheduler {
     }
 
     /** Parses a display string like "8:30 AM" against today's date. Real tee-time data would
-     *  carry a full timestamp; this fake dataset only has a time-of-day string. */
-    private fun parseTodayMillis(timeLabel: String): Long? {
+     *  carry a full timestamp; this fake dataset only has a time-of-day string.
+     *  Internal (rather than private) so it can be unit tested directly. */
+    internal fun parseTodayMillis(timeLabel: String): Long? {
         val parsedTimeOfDay = try {
             timeFormat.parse(timeLabel)
         } catch (e: ParseException) {

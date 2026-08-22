@@ -127,7 +127,7 @@ class FakeTournamentRepository : TournamentRepository {
 
     override fun divisions(): List<Division> = listOf(
         Division("MPO", "Mixed Pro Open", starterCount = 8, matchedCount = 8),
-        Division("FPO", "Feminized Pro Open", starterCount = 9, matchedCount = 9),
+        Division("FPO", "Female Pro Open", starterCount = 9, matchedCount = 9),
         Division("MA40", "Mixed Am 40+", starterCount = 14, matchedCount = 12),
         Division("MA1", "Mixed Am 1", starterCount = 11, matchedCount = 11),
     )

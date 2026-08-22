@@ -3,6 +3,9 @@ package com.undy.tdaid.ui.screens.schedule
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,7 +68,10 @@ fun FullScheduleScreen(onBack: () -> Unit) {
     var filter by remember { mutableStateOf("ALL") }
     val filteredRows = vm.rows.filter { filter == "ALL" || it.division == filter }
 
-    Column(Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)) {
+    Column(
+        Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,

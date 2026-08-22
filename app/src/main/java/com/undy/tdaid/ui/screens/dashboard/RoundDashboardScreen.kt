@@ -3,6 +3,9 @@ package com.undy.tdaid.ui.screens.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -101,7 +104,10 @@ fun RoundDashboardScreen(
     val settings by vm.settings.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    Column(Modifier.fillMaxSize().background(BgPaper)) {
+    Column(
+        Modifier.fillMaxSize().background(BgPaper)
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
         Row(
             Modifier.fillMaxWidth().background(Forest).padding(horizontal = 20.dp, vertical = 20.dp),
             verticalAlignment = Alignment.CenterVertically,

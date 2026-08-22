@@ -2,6 +2,9 @@ package com.undy.tdaid.ui.screens.bioeditor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -114,7 +117,10 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
     }
     val player = vm.player ?: return
 
-    Column(Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)) {
+    Column(
+        Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
         Row(
             Modifier.fillMaxWidth().background(Forest).padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,

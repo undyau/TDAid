@@ -3,6 +3,9 @@ package com.undy.tdaid.ui.screens.fieldnow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -87,7 +90,10 @@ private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min"
 fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     val vm = rememberViewModel { NowAnnouncingViewModel(ServiceLocator.tournamentRepository) }
 
-    Column(Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)) {
+    Column(
+        Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,

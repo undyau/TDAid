@@ -3,6 +3,7 @@ package com.undy.tdaid
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -13,8 +14,11 @@ import com.undy.tdaid.ui.theme.TDAidTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Deliberately NOT edge-to-edge: screens position their own icon buttons right at the
-        // top of the content, and drawing under the status bar made those unreachable.
+        // Android enforces edge-to-edge for apps targeting API 35+ regardless of this call —
+        // it can't be opted out of. Each screen consumes WindowInsets.systemBars itself so
+        // content clears the status bar and gesture nav bar; this just gets proper status-bar
+        // icon contrast.
+        enableEdgeToEdge()
         setContent {
             TDAidApp()
         }

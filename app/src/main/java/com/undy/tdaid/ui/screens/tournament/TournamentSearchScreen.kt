@@ -111,7 +111,7 @@ class TournamentSearchViewModel(
         viewModelScope.launch {
             val dates = formatDateRange(event.startDate, event.endDate)
             val location = listOfNotNull(event.city, event.stateProv ?: event.country).joinToString(", ").ifEmpty { null }
-            settingsRepository.setSelectedTournament(event.tournamentName, dates, location)
+            settingsRepository.setSelectedTournament(event.tournamentName, dates, location, event.tournamentId)
             onDone()
         }
     }

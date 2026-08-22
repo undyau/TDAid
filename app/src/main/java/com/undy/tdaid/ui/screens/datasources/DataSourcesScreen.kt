@@ -47,7 +47,9 @@ import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
+import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.remote.AdgLeaderboardRow
+import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.repo.AdgRepository
 import com.undy.tdaid.data.repo.PdgaRepository
@@ -104,6 +106,20 @@ class DataSourcesViewModel(
         private set
     var adgLookupError by mutableStateOf<String?>(null)
         private set
+
+    var liveTournId by mutableStateOf("")
+    var liveDivision by mutableStateOf("MPO")
+    var liveRound by mutableStateOf("1")
+    var liveLookupInProgress by mutableStateOf(false)
+        private set
+    var liveLookupResults by mutableStateOf<List<PdgaLiveResult>>(emptyList())
+        private set
+    var liveLookupError by mutableStateOf<String?>(null)
+        private set
+
+    fun prefillLiveTournId(tournamentId: String) {
+        if (liveTournId.isBlank()) liveTournId = tournamentId
+    }
 
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
@@ -167,6 +183,27 @@ class DataSourcesViewModel(
             adgLookupInProgress = false
         }
     }
+
+    fun lookupLiveResults() {
+        val tournId = liveTournId.trim()
+        val round = liveRound.trim().toIntOrNull()
+        if (tournId.isEmpty() || round == null) {
+            liveLookupError = "Enter a tournament ID and round number"
+            return
+        }
+        liveLookupInProgress = true
+        liveLookupError = null
+        liveLookupResults = emptyList()
+        viewModelScope.launch {
+            pdgaRepository.fetchLiveResults(tournId, liveDivision.trim().uppercase(), round)
+                .onSuccess { results ->
+                    liveLookupResults = results.sortedBy { it.teeTime }
+                    if (results.isEmpty()) liveLookupError = "No tee times published yet for this round"
+                }
+                .onFailure { e -> liveLookupError = e.message ?: "Lookup failed" }
+            liveLookupInProgress = false
+        }
+    }
 }
 
 @Composable
@@ -177,6 +214,10 @@ fun DataSourcesScreen(onBack: () -> Unit) {
     val settings by vm.settings.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    androidx.compose.runtime.LaunchedEffect(settings.selectedTournamentId) {
+        settings.selectedTournamentId?.let { vm.prefillLiveTournId(it) }
+    }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -402,6 +443,86 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                         }
                         Text(
                             "Real data scraped live from australiandiscgolf.com/leaderboard — no login needed. Try a name from the current standings, e.g. \"Jade Brady\".",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = InkMuted,
+                        )
+                    }
+                }
+            }
+
+            item {
+                Column {
+                    SectionLabel("Look Up Real Starters & Tee Times", modifier = Modifier.padding(bottom = 8.dp))
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = vm.liveTournId,
+                            onValueChange = { vm.liveTournId = it },
+                            label = { Text("Tournament ID") },
+                            singleLine = true,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(
+                                value = vm.liveDivision,
+                                onValueChange = { vm.liveDivision = it },
+                                label = { Text("Division") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                            )
+                            OutlinedTextField(
+                                value = vm.liveRound,
+                                onValueChange = { vm.liveRound = it },
+                                label = { Text("Round") },
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
+                            )
+                        }
+                        OutlineButton(
+                            text = if (vm.liveLookupInProgress) "Looking up…" else "Look Up Tee Times",
+                            onClick = vm::lookupLiveResults,
+                        )
+                        vm.liveLookupError?.let {
+                            Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                        }
+                        if (vm.liveLookupResults.isNotEmpty()) {
+                            val groups = vm.liveLookupResults
+                                .groupBy { it.teeTime }
+                                .entries
+                                .sortedBy { it.key }
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                groups.forEach { (teeTime, players) ->
+                                    Column(
+                                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ForestTint).padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        Text(
+                                            teeTime.ifEmpty { "Tee time TBD" },
+                                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp),
+                                            color = ForestDark,
+                                        )
+                                        players.forEach { p ->
+                                            Text(
+                                                "${p.firstName} ${p.lastName}" +
+                                                    (p.rating?.let { r -> " · $r" } ?: "") +
+                                                    (p.toPar?.let { tp -> " · ${tp.asScoreLabel()}" } ?: ""),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                                color = InkMuted,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Text(
+                            "Real data from PDGA Live — only published shortly before a round tees off. Try TournID 101036, e.g. Division MPO, Round 3.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                             color = InkMuted,
                         )

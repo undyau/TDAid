@@ -29,6 +29,9 @@ data class AppSettings(
     val selectedTournamentName: String? = null,
     val selectedTournamentDates: String? = null,
     val selectedTournamentLocation: String? = null,
+    /** The real PDGA tournament_id from Event Search, if a real event is selected — lets other
+     *  real-data tools (like live tee-time lookup) default to it instead of re-typing an ID. */
+    val selectedTournamentId: String? = null,
 )
 
 private object Keys {
@@ -45,6 +48,7 @@ private object Keys {
     val SELECTED_TOURNAMENT_NAME = stringPreferencesKey("selected_tournament_name")
     val SELECTED_TOURNAMENT_DATES = stringPreferencesKey("selected_tournament_dates")
     val SELECTED_TOURNAMENT_LOCATION = stringPreferencesKey("selected_tournament_location")
+    val SELECTED_TOURNAMENT_ID = stringPreferencesKey("selected_tournament_id")
 }
 
 interface SettingsRepository {
@@ -56,7 +60,7 @@ interface SettingsRepository {
     suspend fun setAdgConnected(connected: Boolean)
     suspend fun setAdgShowRank(show: Boolean)
     suspend fun markSyncedNow()
-    suspend fun setSelectedTournament(name: String, dates: String, location: String?)
+    suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?)
     suspend fun clearSelectedTournament()
 }
 
@@ -77,6 +81,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             selectedTournamentName = prefs[Keys.SELECTED_TOURNAMENT_NAME],
             selectedTournamentDates = prefs[Keys.SELECTED_TOURNAMENT_DATES],
             selectedTournamentLocation = prefs[Keys.SELECTED_TOURNAMENT_LOCATION],
+            selectedTournamentId = prefs[Keys.SELECTED_TOURNAMENT_ID],
         )
     }
 
@@ -113,11 +118,12 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.dataStore.edit { it[Keys.LAST_SYNCED_AT] = System.currentTimeMillis() }
     }
 
-    override suspend fun setSelectedTournament(name: String, dates: String, location: String?) {
+    override suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?) {
         context.dataStore.edit { prefs ->
             prefs[Keys.SELECTED_TOURNAMENT_NAME] = name
             prefs[Keys.SELECTED_TOURNAMENT_DATES] = dates
             if (location != null) prefs[Keys.SELECTED_TOURNAMENT_LOCATION] = location else prefs.remove(Keys.SELECTED_TOURNAMENT_LOCATION)
+            if (tournamentId != null) prefs[Keys.SELECTED_TOURNAMENT_ID] = tournamentId else prefs.remove(Keys.SELECTED_TOURNAMENT_ID)
         }
     }
 
@@ -126,6 +132,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             prefs.remove(Keys.SELECTED_TOURNAMENT_NAME)
             prefs.remove(Keys.SELECTED_TOURNAMENT_DATES)
             prefs.remove(Keys.SELECTED_TOURNAMENT_LOCATION)
+            prefs.remove(Keys.SELECTED_TOURNAMENT_ID)
         }
     }
 }

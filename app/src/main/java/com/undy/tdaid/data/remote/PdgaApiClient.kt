@@ -11,6 +11,7 @@ import java.io.IOException
 import java.net.URLEncoder
 
 private const val BASE_URL = "https://api.pdga.com"
+private const val LIVE_BASE_URL = "https://www.pdga.com/apps/tournament/live-api"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
 data class PdgaSession(
@@ -40,6 +41,20 @@ data class PdgaEventResult(
     val startDate: String,
     val endDate: String,
     val tier: String?,
+)
+
+/** One player's real, live result/tee-time record for a specific tournament round, as published
+ *  by PDGA Live — this is what actually carries the exact tee time, unlike the documented REST
+ *  API (which only exposes season-level stats, not per-round pairings). */
+data class PdgaLiveResult(
+    val teeTime: String,
+    val firstName: String,
+    val lastName: String,
+    val pdgaNumber: Int,
+    val rating: Int?,
+    val city: String?,
+    val country: String?,
+    val toPar: Int?,
 )
 
 class PdgaApiException(message: String) : IOException(message)
@@ -146,6 +161,42 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                         startDate = e.optString("start_date").trim(),
                         endDate = e.optString("end_date").trim(),
                         tier = e.optString("tier").trim().ifEmpty { null },
+                    )
+                }
+            }
+        }
+
+    /** Real, unauthenticated tee-time/pairings data for one division/round of a tournament —
+     *  found via the browser Network tab (`live_results_fetch_round`), since it's not part of
+     *  PDGA's documented REST API and isn't discoverable from the Live scoring page's raw HTML
+     *  (that page loads its data client-side, from this same endpoint, after the page renders). */
+    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): List<PdgaLiveResult> =
+        withContext(Dispatchers.IO) {
+            val url = "$LIVE_BASE_URL/live_results_fetch_round?TournID=$tournamentId&Division=$division&Round=$round"
+            val request = Request.Builder().url(url).build()
+
+            client.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw PdgaApiException("Live results failed (HTTP ${response.code}): ${text.take(200)}")
+                }
+                val json = try {
+                    JSONObject(text)
+                } catch (e: Exception) {
+                    throw PdgaApiException("Unexpected live results response: ${text.take(200)}")
+                }
+                val scores = json.optJSONObject("data")?.optJSONArray("scores") ?: return@use emptyList()
+                (0 until scores.length()).map { i ->
+                    val s = scores.getJSONObject(i)
+                    PdgaLiveResult(
+                        teeTime = s.optString("TeeTime").trim(),
+                        firstName = s.optString("FirstName").trim(),
+                        lastName = s.optString("LastName").trim(),
+                        pdgaNumber = s.optInt("PDGANum"),
+                        rating = s.optInt("Rating").takeIf { s.has("Rating") && !s.isNull("Rating") },
+                        city = s.optString("City").trim().ifEmpty { null },
+                        country = s.optString("Country").trim().ifEmpty { null },
+                        toPar = if (s.has("ToPar") && !s.isNull("ToPar")) s.optInt("ToPar") else null,
                     )
                 }
             }

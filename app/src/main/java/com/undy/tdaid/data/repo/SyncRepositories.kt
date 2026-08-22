@@ -4,6 +4,7 @@ import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
 import com.undy.tdaid.data.remote.PdgaEventResult
+import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.remote.PdgaSession
 
@@ -19,6 +20,9 @@ interface PdgaRepository {
     fun logout()
     suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?>
     suspend fun searchEvents(query: String): Result<List<PdgaEventResult>>
+    /** Real per-round tee times/pairings — unlike everything else here, this endpoint needs
+     *  no PDGA login at all. */
+    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<List<PdgaLiveResult>>
     suspend fun syncNow(): Long
 }
 
@@ -45,6 +49,9 @@ class RealPdgaRepository(private val client: PdgaApiClient = PdgaApiClient()) : 
         val activeSession = session ?: error("Not logged in to PDGA")
         client.searchEvents(activeSession, query)
     }
+
+    override suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<List<PdgaLiveResult>> =
+        runCatching { client.fetchLiveResults(tournamentId, division, round) }
 
     override suspend fun syncNow(): Long = System.currentTimeMillis()
 }

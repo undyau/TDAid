@@ -1,16 +1,29 @@
+@file:OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+
 package com.undy.tdaid.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.undy.tdaid.R
 
-// The design system pairs Space Grotesk (display) with IBM Plex Sans (body). Bundling those
-// font files needs a network fetch this environment can't do, so this stands in with the
-// platform sans-serif at matching weights/spacing until real font assets are added.
-val DisplayFontFamily = FontFamily.SansSerif
-val BodyFontFamily = FontFamily.SansSerif
+// The design system pairs Space Grotesk (display) with IBM Plex Sans (body) — both real,
+// OFL-licensed variable fonts bundled in res/font (see /licenses for the OFL text), each
+// instanced per weight via its variation axis rather than needing separate static files.
+val DisplayFontFamily = FontFamily(
+    Font(R.font.space_grotesk, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.space_grotesk, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
+val BodyFontFamily = FontFamily(
+    Font(R.font.ibm_plex_sans, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.ibm_plex_sans, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.ibm_plex_sans, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+    Font(R.font.ibm_plex_sans, weight = FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+)
 
 val TDAidTypography = Typography(
     headlineLarge = TextStyle(fontFamily = DisplayFontFamily, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = (-0.2).sp),

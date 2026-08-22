@@ -53,6 +53,7 @@ import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.asScoreLabel
+import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
@@ -80,14 +81,18 @@ import kotlinx.coroutines.flow.stateIn
  *  — else the demo sample), so Setup's roster view and Field Mode's live announce queue always
  *  agree, exactly like the original demo-only design did. */
 class NowAnnouncingViewModel(
-    divisionCode: String,
+    private val divisionCode: String,
     tournamentRepository: TournamentRepository,
     liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
-    val groups = liveRosterRepository.current
+    val liveRoster = liveRosterRepository.current
+    val groups = liveRoster
         .map { live -> if (live != null && live.division == divisionCode) live.groups else demoGroups }
         .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
+
+    fun roundLabel(liveRoster: LiveRoster?): String =
+        if (liveRoster != null && liveRoster.division == divisionCode) "RD ${liveRoster.round} · Live" else "RD 2"
 
     var currentIndex by mutableStateOf(0)
         private set
@@ -114,6 +119,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
     }
     val context = LocalContext.current
     val groups by vm.groups.collectAsState()
+    val liveRoster by vm.liveRoster.collectAsState()
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
     // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
@@ -141,7 +147,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
                 Text("Offline · cached 7:42 AM", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = InkMuted)
             }
             Spacer(Modifier.width(8.dp))
-            Text("$divisionCode · RD 2", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
+            Text("$divisionCode · ${vm.roundLabel(liveRoster)}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenAlert) {
                 Icon(Icons.Filled.Notifications, contentDescription = "Tee-time alert", tint = ForestDark, modifier = Modifier.size(19.dp))
             }

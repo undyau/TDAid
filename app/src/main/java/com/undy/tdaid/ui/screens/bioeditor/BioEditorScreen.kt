@@ -47,11 +47,16 @@ import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.local.BioNote
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.model.Player
+import com.undy.tdaid.data.repo.AdgRepository
+import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.ui.AdgLiveState
+import com.undy.tdaid.ui.PdgaLiveState
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.rememberViewModel
+import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.AccentTint
 import com.undy.tdaid.ui.theme.Cream
 import com.undy.tdaid.ui.theme.Forest
@@ -68,8 +73,11 @@ class BioEditorViewModel(
     private val playerId: String,
     tournamentRepository: TournamentRepository,
     private val bioNotesRepository: BioNotesRepository,
+    private val pdgaRepository: PdgaRepository,
+    private val adgRepository: AdgRepository,
 ) : ViewModel() {
     val player: Player? = tournamentRepository.teeGroups().flatMap { it.players }.find { it.id == playerId }
+    val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
 
     var pronunciation by mutableStateOf("")
     var hometown by mutableStateOf("")
@@ -77,6 +85,11 @@ class BioEditorViewModel(
     var saveToLibrary by mutableStateOf(true)
     var sourceRoundLabel by mutableStateOf<String?>(null)
     var justSaved by mutableStateOf(false)
+        private set
+
+    var pdgaLive by mutableStateOf(PdgaLiveState())
+        private set
+    var adgLive by mutableStateOf(AdgLiveState())
         private set
 
     init {
@@ -89,6 +102,26 @@ class BioEditorViewModel(
                 saveToLibrary = existing.savedToLibrary
                 sourceRoundLabel = existing.sourceRoundLabel
             }
+        }
+    }
+
+    fun checkLiveData() {
+        val p = player ?: return
+        if (pdgaRepository.isLoggedIn) {
+            pdgaLive = PdgaLiveState(loading = true)
+            viewModelScope.launch {
+                pdgaLive = pdgaRepository.lookupPlayer(p.pdga.pdgaNumber).fold(
+                    onSuccess = { result -> if (result == null) PdgaLiveState(notFound = true) else PdgaLiveState(result = result) },
+                    onFailure = { e -> PdgaLiveState(error = e.message ?: "Lookup failed") },
+                )
+            }
+        }
+        adgLive = AdgLiveState(loading = true)
+        viewModelScope.launch {
+            adgLive = adgRepository.lookupPlayerByName(p.name).fold(
+                onSuccess = { row -> if (row == null) AdgLiveState(notFound = true) else AdgLiveState(result = row) },
+                onFailure = { e -> AdgLiveState(error = e.message ?: "Lookup failed") },
+            )
         }
     }
 
@@ -113,7 +146,13 @@ class BioEditorViewModel(
 @Composable
 fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
     val vm = rememberViewModel {
-        BioEditorViewModel(playerId, ServiceLocator.tournamentRepository, ServiceLocator.bioNotesRepository)
+        BioEditorViewModel(
+            playerId,
+            ServiceLocator.tournamentRepository,
+            ServiceLocator.bioNotesRepository,
+            ServiceLocator.pdgaRepository,
+            ServiceLocator.adgRepository,
+        )
     }
     val player = vm.player ?: return
 
@@ -158,6 +197,16 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                     }
                     PillTag(text = "From PDGA", containerColor = SurfaceVariant, contentColor = InkMuted)
                 }
+            }
+
+            item {
+                LiveDataSection(
+                    player = player,
+                    pdgaLoggedIn = vm.pdgaLoggedIn,
+                    pdgaLive = vm.pdgaLive,
+                    adgLive = vm.adgLive,
+                    onCheckLive = vm::checkLiveData,
+                )
             }
 
             if (vm.sourceRoundLabel != null) {
@@ -224,6 +273,75 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Explicit, per-player button that hits the real PDGA API (if logged in) and the real ADG Tour
+ *  leaderboard. A PDGA name mismatch is surfaced rather than silently trusted, since this
+ *  player's PDGA number is a demo placeholder, not necessarily their real assigned number. */
+@Composable
+private fun LiveDataSection(
+    player: Player,
+    pdgaLoggedIn: Boolean,
+    pdgaLive: PdgaLiveState,
+    adgLive: AdgLiveState,
+    onCheckLive: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        val busy = pdgaLive.loading || adgLive.loading
+        PrimaryButton(
+            text = if (busy) "Checking live data…" else "Check Live PDGA/ADG Data",
+            onClick = onCheckLive,
+        )
+
+        when {
+            pdgaLive.result != null -> {
+                val mismatch = pdgaLive.nameMismatch(player.name)
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+                        .background(if (mismatch) AccentTint else ForestTint).padding(9.dp),
+                ) {
+                    Text(
+                        if (mismatch) {
+                            "PDGA #${player.pdga.pdgaNumber} is registered to ${pdgaLive.result.firstName} ${pdgaLive.result.lastName} — verify the number"
+                        } else {
+                            "Live PDGA: Rating ${pdgaLive.result.rating ?: "—"} · ${pdgaLive.result.membershipStatus} member"
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = ForestDark,
+                    )
+                }
+            }
+            pdgaLive.notFound -> Text(
+                "No real PDGA record for #${player.pdga.pdgaNumber}",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted,
+            )
+            pdgaLive.error != null -> Text(pdgaLive.error, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = Accent)
+            !pdgaLoggedIn -> Text(
+                "Log in to PDGA in Data Sources to check this player's real record",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = InkMuted,
+            )
+        }
+
+        when {
+            adgLive.result != null -> Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(AccentTint).padding(9.dp),
+            ) {
+                Text(
+                    "Live ADG: #${adgLive.result.rank} in ${adgLive.result.division} · ${adgLive.result.points} pts",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                    color = ForestDark,
+                )
+            }
+            adgLive.notFound -> Text(
+                "\"${player.name}\" isn't in the current ADG Tour standings",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted,
+            )
+            adgLive.error != null -> Text(adgLive.error, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = Accent)
         }
     }
 }

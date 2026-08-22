@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import java.net.URLEncoder
 
 private const val BASE_URL = "https://api.pdga.com"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
@@ -28,6 +29,17 @@ data class PdgaPlayerResult(
     val city: String?,
     val stateProv: String?,
     val country: String?,
+)
+
+data class PdgaEventResult(
+    val tournamentId: String,
+    val tournamentName: String,
+    val city: String?,
+    val stateProv: String?,
+    val country: String?,
+    val startDate: String,
+    val endDate: String,
+    val tier: String?,
 )
 
 class PdgaApiException(message: String) : IOException(message)
@@ -100,6 +112,42 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                     stateProv = p.optString("state_prov").trim().ifEmpty { null },
                     country = p.optString("country").trim().ifEmpty { null },
                 )
+            }
+        }
+
+    suspend fun searchEvents(session: PdgaSession, eventName: String): List<PdgaEventResult> =
+        withContext(Dispatchers.IO) {
+            val encoded = URLEncoder.encode(eventName, "UTF-8")
+            val url = "$BASE_URL/services/json/event?event_name=$encoded&limit=25"
+            val request = Request.Builder()
+                .url(url)
+                .header("Cookie", "${session.cookieName}=${session.cookieValue}")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw PdgaApiException("Event search failed (HTTP ${response.code}): ${text.take(200)}")
+                }
+                val json = try {
+                    JSONObject(text)
+                } catch (e: Exception) {
+                    throw PdgaApiException("Unexpected event search response: ${text.take(200)}")
+                }
+                val events = json.optJSONArray("events") ?: return@use emptyList()
+                (0 until events.length()).map { i ->
+                    val e = events.getJSONObject(i)
+                    PdgaEventResult(
+                        tournamentId = e.optString("tournament_id").trim(),
+                        tournamentName = e.optString("tournament_name").trim(),
+                        city = e.optString("city").trim().ifEmpty { null },
+                        stateProv = e.optString("state_prov").trim().ifEmpty { null },
+                        country = e.optString("country").trim().ifEmpty { null },
+                        startDate = e.optString("start_date").trim(),
+                        endDate = e.optString("end_date").trim(),
+                        tier = e.optString("tier").trim().ifEmpty { null },
+                    )
+                }
             }
         }
 }

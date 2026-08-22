@@ -99,6 +99,7 @@ fun RoundDashboardScreen(
     onEnterFieldMode: () -> Unit,
     onOpenDataSources: () -> Unit,
     onOpenRoster: (String) -> Unit,
+    onSelectTournament: () -> Unit,
 ) {
     val vm = rememberViewModel { DashboardViewModel(ServiceLocator.tournamentRepository, ServiceLocator.settingsRepository) }
     val settings by vm.settings.collectAsState()
@@ -131,16 +132,34 @@ fun RoundDashboardScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor)
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(vm.tournamentName, style = MaterialTheme.typography.titleLarge)
-                        Text("${vm.roundLabel} · ${vm.roundDate}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp), color = InkMuted)
+                val realTournament = settings.selectedTournamentName != null
+                val displayedName = settings.selectedTournamentName ?: vm.tournamentName
+                val displayedDates = settings.selectedTournamentDates ?: "${vm.roundLabel} · ${vm.roundDate}"
+                Column {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor)
+                            .clickable(onClick = onSelectTournament)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(displayedName, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                displayedDates + (settings.selectedTournamentLocation?.let { " · $it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                                color = InkMuted,
+                            )
+                        }
+                        Icon(Icons.Filled.ExpandMore, contentDescription = "Select tournament", tint = InkMuted)
                     }
-                    Icon(Icons.Filled.ExpandMore, contentDescription = null, tint = InkMuted)
+                    if (realTournament) {
+                        Text(
+                            "Real PDGA event · starters/schedule below are still demo data",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                            color = InkMuted,
+                            modifier = Modifier.padding(top = 5.dp, start = 4.dp),
+                        )
+                    }
                 }
             }
 

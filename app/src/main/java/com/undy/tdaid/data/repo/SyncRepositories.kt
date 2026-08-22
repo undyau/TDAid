@@ -3,6 +3,7 @@ package com.undy.tdaid.data.repo
 import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
+import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.remote.PdgaSession
 
@@ -17,6 +18,7 @@ interface PdgaRepository {
     suspend fun login(username: String, password: String): Result<Unit>
     fun logout()
     suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?>
+    suspend fun searchEvents(query: String): Result<List<PdgaEventResult>>
     suspend fun syncNow(): Long
 }
 
@@ -37,6 +39,11 @@ class RealPdgaRepository(private val client: PdgaApiClient = PdgaApiClient()) : 
     override suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?> = runCatching {
         val activeSession = session ?: error("Not logged in to PDGA")
         client.searchPlayer(activeSession, pdgaNumber)
+    }
+
+    override suspend fun searchEvents(query: String): Result<List<PdgaEventResult>> = runCatching {
+        val activeSession = session ?: error("Not logged in to PDGA")
+        client.searchEvents(activeSession, query)
     }
 
     override suspend fun syncNow(): Long = System.currentTimeMillis()

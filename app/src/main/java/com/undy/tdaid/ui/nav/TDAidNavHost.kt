@@ -12,6 +12,7 @@ import com.undy.tdaid.ui.screens.datasources.DataSourcesScreen
 import com.undy.tdaid.ui.screens.fieldnow.NowAnnouncingScreen
 import com.undy.tdaid.ui.screens.roster.RosterScreen
 import com.undy.tdaid.ui.screens.schedule.FullScheduleScreen
+import com.undy.tdaid.ui.screens.tournament.TournamentSearchScreen
 
 private object Routes {
     const val DASHBOARD = "dashboard"
@@ -21,6 +22,7 @@ private object Routes {
     const val FIELD_NOW = "fieldNow"
     const val TEE_ALERT = "teeAlert"
     const val SCHEDULE = "schedule"
+    const val TOURNAMENT_SEARCH = "tournamentSearch"
 
     fun roster(division: String) = "roster/$division"
     fun bioEditor(playerId: String) = "bioEditor/$playerId"
@@ -36,6 +38,7 @@ fun TDAidNavHost() {
                 onEnterFieldMode = { navController.navigate(Routes.FIELD_NOW) },
                 onOpenDataSources = { navController.navigate(Routes.DATA_SOURCES) },
                 onOpenRoster = { division -> navController.navigate(Routes.roster(division)) },
+                onSelectTournament = { navController.navigate(Routes.TOURNAMENT_SEARCH) },
             )
         }
         composable(Routes.ROSTER) { backStackEntry ->
@@ -64,6 +67,12 @@ fun TDAidNavHost() {
         }
         composable(Routes.SCHEDULE) {
             FullScheduleScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.TOURNAMENT_SEARCH) {
+            TournamentSearchScreen(
+                onBack = { navController.popBackStack() },
+                onGoToDataSources = { navController.navigate(Routes.DATA_SOURCES) },
+            )
         }
     }
 }

@@ -53,11 +53,20 @@ data class PdgaDivisionMeta(
     val playerCount: Int,
 )
 
-/** A tournament's real division list and current round, as published by PDGA Live — lets the
- *  app discover what to load right after a TD picks a real event, instead of guessing. */
+/** One real course a tournament is played on, as published by PDGA Live. An event can publish
+ *  more than one layout (different tee pads per division, a sudden-death layout, etc.) but
+ *  they're usually all the same physical course — [courseId] is how those collapse to one. */
+data class PdgaCourseMeta(
+    val courseId: Int,
+    val name: String,
+)
+
+/** A tournament's real division list, current round, and course(s), as published by PDGA Live —
+ *  lets the app discover what to load right after a TD picks a real event, instead of guessing. */
 data class PdgaEventMeta(
     val divisions: List<PdgaDivisionMeta>,
     val latestRound: Int,
+    val courses: List<PdgaCourseMeta>,
 )
 
 class PdgaApiException(message: String) : IOException(message)
@@ -197,7 +206,16 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                     playerCount = d.optInt("Players"),
                 )
             }
-            PdgaEventMeta(divisions = divisions, latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1))
+            val layoutsJson = data.optJSONArray("Layouts")
+            // Real events sometimes publish a layout with no course attached (e.g. a placeholder
+            // "sudden death" entry) — those have no CourseID/CourseName and are skipped.
+            val courses = (if (layoutsJson == null) emptyList() else (0 until layoutsJson.length()).mapNotNull { i ->
+                val l = layoutsJson.getJSONObject(i)
+                val courseId = if (l.has("CourseID") && !l.isNull("CourseID")) l.optInt("CourseID") else null
+                val name = l.optString("CourseName").trim()
+                if (courseId == null || name.isEmpty()) null else PdgaCourseMeta(courseId, name)
+            }).distinctBy { it.courseId }
+            PdgaEventMeta(divisions = divisions, latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1), courses = courses)
         }
     }
 }

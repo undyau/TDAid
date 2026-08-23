@@ -1,6 +1,7 @@
 package com.undy.tdaid.ui.screens.bioeditor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -51,6 +53,9 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.ToggleRow
+import com.undy.tdaid.ui.PdgaAttribution
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaPlayerPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.AccentTint
@@ -125,6 +130,7 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
         )
     }
     val player = vm.player
+    val context = androidx.compose.ui.platform.LocalContext.current
     if (player == null) {
         Column(
             Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -185,7 +191,12 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                     }
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(player.name, style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp), color = Ink)
+                        Text(
+                            player.name,
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp, textDecoration = TextDecoration.Underline),
+                            color = Ink,
+                            modifier = Modifier.clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                        )
                         Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted)
                     }
                     PillTag(text = "From PDGA", containerColor = SurfaceVariant, contentColor = InkMuted)
@@ -255,6 +266,10 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            item {
+                PdgaAttribution(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             }
         }
     }

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
@@ -39,6 +40,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.app.Application
@@ -50,6 +52,9 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.NotificationHelper
 import com.undy.tdaid.ui.components.PrimaryButton
+import com.undy.tdaid.ui.PdgaAttribution
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaPlayerPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.Cream
@@ -211,9 +216,11 @@ fun TeeTimeAlertScreen() {
                 Text(
                     player.name,
                     color = Cream,
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp, textDecoration = TextDecoration.Underline),
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-                        .background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 14.dp, vertical = 10.dp),
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }
         }
@@ -248,6 +255,10 @@ fun TeeTimeAlertScreen() {
                 color = Cream.copy(alpha = 0.55f),
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp, lineHeight = 15.sp),
                 modifier = Modifier.padding(top = 5.dp),
+            )
+            PdgaAttribution(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                color = Cream.copy(alpha = 0.55f),
             )
         }
     }

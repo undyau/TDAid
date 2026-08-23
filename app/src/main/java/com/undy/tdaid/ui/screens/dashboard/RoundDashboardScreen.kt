@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -51,7 +52,11 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.components.StepperRow
+import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.formatRelative
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaCoursePath
+import com.undy.tdaid.ui.pdgaEventPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.BgPaper
 import com.undy.tdaid.ui.theme.Cream
@@ -70,6 +75,7 @@ class DashboardViewModel(
     private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     val eventDivisions = liveRosterRepository.eventDivisions
+    val eventCourses = liveRosterRepository.eventCourses
     val liveLoading = liveRosterRepository.loading
     val liveLoadingStatus = liveRosterRepository.loadingStatus
     val profilePrefetchStatus = liveRosterRepository.profilePrefetchStatus
@@ -119,6 +125,7 @@ fun RoundDashboardScreen(
     }
     val settings by vm.settings.collectAsState()
     val eventDivisions by vm.eventDivisions.collectAsState()
+    val eventCourses by vm.eventCourses.collectAsState()
     val liveLoading by vm.liveLoading.collectAsState()
     val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
     val profilePrefetchStatus by vm.profilePrefetchStatus.collectAsState()
@@ -127,6 +134,7 @@ fun RoundDashboardScreen(
     val liveError by vm.liveError.collectAsState()
     val divisions = vm.divisionsFor(eventDivisions)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(divisions) {
         if (divisions.none { it.code == vm.selectedDivision }) {
@@ -187,7 +195,20 @@ fun RoundDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(displayedName, style = MaterialTheme.typography.titleLarge)
+                            val tournamentId = settings.selectedTournamentId
+                            Text(
+                                displayedName,
+                                style = if (tournamentId != null) {
+                                    MaterialTheme.typography.titleLarge.copy(textDecoration = TextDecoration.Underline)
+                                } else {
+                                    MaterialTheme.typography.titleLarge
+                                },
+                                modifier = if (tournamentId != null) {
+                                    Modifier.clickable { openPdgaUrl(context, pdgaEventPath(tournamentId)) }
+                                } else {
+                                    Modifier
+                                },
+                            )
                             Text(
                                 displayedDates + (settings.selectedTournamentLocation?.let { " · $it" } ?: ""),
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
@@ -249,6 +270,27 @@ fun RoundDashboardScreen(
                 }
             }
 
+            if (eventCourses.isNotEmpty()) {
+                item {
+                    Column {
+                        SectionLabel("Course", modifier = Modifier.padding(bottom = 10.dp))
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            eventCourses.forEach { course ->
+                                Text(
+                                    course.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp, textDecoration = TextDecoration.Underline),
+                                    color = Ink,
+                                    modifier = Modifier.clickable { openPdgaUrl(context, pdgaCoursePath(course.courseId)) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 Column {
                     SectionLabel("Divisions", modifier = Modifier.padding(bottom = 10.dp))
@@ -297,6 +339,12 @@ fun RoundDashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )
+                }
+            }
+
+            if (settings.selectedTournamentId != null) {
+                item {
+                    PdgaAttribution(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), color = InkMuted)
                 }
             }
         }

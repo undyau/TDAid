@@ -51,9 +51,11 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.OutlineButton
+import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.components.ToggleRow
+import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
@@ -325,6 +327,17 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             color = InkMuted,
                         )
                     }
+                }
+            }
+
+            item {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    PillTag(text = "PDGA Authorized Developer", containerColor = ForestTint, contentColor = ForestDark)
+                    PdgaAttribution()
                 }
             }
         }

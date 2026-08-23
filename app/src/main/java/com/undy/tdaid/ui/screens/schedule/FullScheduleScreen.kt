@@ -39,9 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,8 +58,11 @@ import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
+import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.components.scoreColor
 import com.undy.tdaid.ui.formatRelative
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaPlayerPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.Border
@@ -190,6 +197,9 @@ fun FullScheduleScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(filteredRows) { row -> ScheduleRowItem(row) }
+                item {
+                    PdgaAttribution(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                }
             }
         }
     }
@@ -197,6 +207,7 @@ fun FullScheduleScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ScheduleRowItem(row: ScheduleRow) {
+    val context = LocalContext.current
     val isCurrent = row.status == RowStatus.CURRENT
     val isDone = row.status == RowStatus.DONE
     Row(
@@ -220,7 +231,15 @@ private fun ScheduleRowItem(row: ScheduleRow) {
                 buildAnnotatedString {
                     row.players.forEachIndexed { index, player ->
                         if (index > 0) append("  ·  ")
-                        append(player.name)
+                        withLink(
+                            LinkAnnotation.Clickable(tag = "player-${player.id}") {
+                                openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber))
+                            },
+                        ) {
+                            withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
+                                append(player.name)
+                            }
+                        }
                         player.overall?.let { overall ->
                             append(" ")
                             withStyle(SpanStyle(color = scoreColor(overall.scoreToPar, onDark = false), fontWeight = FontWeight.Bold)) {

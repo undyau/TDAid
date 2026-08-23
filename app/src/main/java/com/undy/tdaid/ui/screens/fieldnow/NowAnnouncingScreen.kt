@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -65,7 +66,10 @@ import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.ScoreChip
 import com.undy.tdaid.ui.components.SectionLabel
+import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.formatRelative
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaPlayerPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.AccentTint
@@ -213,7 +217,12 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(player.name, color = Cream, style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp), modifier = Modifier.weight(1f))
+                                    Text(
+                                        player.name,
+                                        color = Cream,
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp, textDecoration = TextDecoration.Underline),
+                                        modifier = Modifier.weight(1f).clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                                    )
                                     if (current.division.isEmpty() && player.division.isNotEmpty()) {
                                         Text(
                                             player.division,
@@ -270,6 +279,12 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+
+            if (groups.isNotEmpty()) {
+                item {
+                    PdgaAttribution(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
             }
         }
@@ -339,6 +354,7 @@ private fun OnDeckRow(group: TeeGroup, countdown: String, urgent: Boolean, onPla
 
 @Composable
 private fun BioSheetContent(player: Player) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 19.dp, vertical = 6.dp).padding(bottom = 22.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
@@ -349,7 +365,12 @@ private fun BioSheetContent(player: Player) {
             }
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(player.name, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.5.sp), color = Ink)
+                Text(
+                    player.name,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.5.sp, textDecoration = TextDecoration.Underline),
+                    color = Ink,
+                    modifier = Modifier.clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                )
                 Text("PDGA #${player.pdga.pdgaNumber} · Member since ${player.pdga.memberSince}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
             }
         }

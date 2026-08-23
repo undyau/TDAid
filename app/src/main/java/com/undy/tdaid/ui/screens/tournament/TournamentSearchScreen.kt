@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -42,6 +44,9 @@ import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.ui.components.PrimaryButton
+import com.undy.tdaid.ui.PdgaAttribution
+import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.pdgaEventPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.BgPaper
@@ -199,18 +204,30 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
                     color = InkMuted,
                 )
             }
+
+            if (vm.results.isNotEmpty()) {
+                item {
+                    PdgaAttribution(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun EventRow(event: PdgaEventResult, onClick: () -> Unit) {
+    val context = LocalContext.current
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceColor)
             .clickable(onClick = onClick).padding(13.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(event.tournamentName, style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp), color = Ink)
+        Text(
+            event.tournamentName,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp, textDecoration = TextDecoration.Underline),
+            color = Ink,
+            modifier = Modifier.clickable { openPdgaUrl(context, pdgaEventPath(event.tournamentId)) },
+        )
         val location = listOfNotNull(event.city, event.stateProv ?: event.country).joinToString(", ")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

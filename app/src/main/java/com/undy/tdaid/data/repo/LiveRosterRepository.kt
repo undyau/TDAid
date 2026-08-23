@@ -9,6 +9,7 @@ import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.prefs.SettingsRepository
+import com.undy.tdaid.data.remote.PdgaCourseMeta
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
@@ -79,6 +80,10 @@ interface LiveRosterRepository {
      *  that succeeds, so Dashboard can show real divisions (with real player counts) instead of
      *  the demo list once a TD picks a real tournament. */
     val eventDivisions: StateFlow<List<PdgaDivisionMeta>>
+    /** The real course(s) for whichever event [loadAllDivisions] last ran for — empty until that
+     *  succeeds. Usually a single course; distinct only when an event genuinely spans more than
+     *  one physical course. */
+    val eventCourses: StateFlow<List<PdgaCourseMeta>>
     val loading: StateFlow<Boolean>
     /** Human-readable progress for a multi-division load, e.g. "Loading FPO (2/4)…". Null when
      *  not loading or when a single-division [load] is in progress. */
@@ -129,6 +134,8 @@ class RealLiveRosterRepository(
     override val rosters: StateFlow<Map<String, LiveRoster>> = _rosters.asStateFlow()
     private val _eventDivisions = MutableStateFlow<List<PdgaDivisionMeta>>(emptyList())
     override val eventDivisions: StateFlow<List<PdgaDivisionMeta>> = _eventDivisions.asStateFlow()
+    private val _eventCourses = MutableStateFlow<List<PdgaCourseMeta>>(emptyList())
+    override val eventCourses: StateFlow<List<PdgaCourseMeta>> = _eventCourses.asStateFlow()
     private val _loading = MutableStateFlow(false)
     override val loading: StateFlow<Boolean> = _loading.asStateFlow()
     private val _loadingStatus = MutableStateFlow<String?>(null)
@@ -180,6 +187,7 @@ class RealLiveRosterRepository(
             pdgaRepository.fetchEventMeta(tournamentId)
                 .onSuccess { meta ->
                     _eventDivisions.value = meta.divisions
+                    _eventCourses.value = meta.courses
                     val loaded = mutableMapOf<String, LiveRoster>()
                     meta.divisions.forEachIndexed { index, division ->
                         _loadingStatus.value = "Loading ${division.code} (${index + 1}/${meta.divisions.size})…"
@@ -214,6 +222,7 @@ class RealLiveRosterRepository(
         prefetchJob = null
         _rosters.value = emptyMap()
         _eventDivisions.value = emptyList()
+        _eventCourses.value = emptyList()
         _error.value = null
         _profilePrefetchStatus.value = null
         _lastLoadedAtMillis.value = null

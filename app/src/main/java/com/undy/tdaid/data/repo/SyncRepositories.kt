@@ -28,7 +28,6 @@ interface PdgaRepository {
     suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<List<PdgaLiveResult>>
     /** Real division list + current round for a tournament — also needs no login. */
     suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta>
-    suspend fun syncNow(): Long
 }
 
 class RealPdgaRepository(
@@ -78,8 +77,6 @@ class RealPdgaRepository(
 
     override suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta> =
         runCatching { client.fetchEventMeta(tournamentId) }
-
-    override suspend fun syncNow(): Long = System.currentTimeMillis()
 }
 
 /**
@@ -92,7 +89,6 @@ interface AdgRepository {
     /** The whole leaderboard in one request — used to enrich a real roster in bulk instead of
      *  looking up every player one at a time. */
     suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>>
-    suspend fun syncNow(): Long
 }
 
 class RealAdgRepository(private val scraper: AdgScraper = AdgScraper()) : AdgRepository {
@@ -102,6 +98,4 @@ class RealAdgRepository(private val scraper: AdgScraper = AdgScraper()) : AdgRep
     }
 
     override suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>> = runCatching { scraper.fetchLeaderboard() }
-
-    override suspend fun syncNow(): Long = System.currentTimeMillis()
 }

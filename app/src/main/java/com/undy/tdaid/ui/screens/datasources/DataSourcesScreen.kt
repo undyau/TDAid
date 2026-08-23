@@ -52,12 +52,12 @@ import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.repo.AdgRepository
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
-import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
@@ -79,8 +79,10 @@ class DataSourcesViewModel(
     private val settingsRepository: SettingsRepository,
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
+    private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+    val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
 
     var pdgaLoggedIn by mutableStateOf(pdgaRepository.isLoggedIn)
         private set
@@ -123,14 +125,17 @@ class DataSourcesViewModel(
 
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
-    fun setSync(ratings: Boolean? = null, results: Boolean? = null, membership: Boolean? = null, bios: Boolean? = null) =
-        viewModelScope.launch { settingsRepository.setSyncToggle(ratings, results, membership, bios) }
-    fun setFrequency(min: Int) = viewModelScope.launch { settingsRepository.setSyncFrequency(min) }
+    fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
 
-    fun syncNow() = viewModelScope.launch {
-        pdgaRepository.syncNow()
-        adgRepository.syncNow()
-        settingsRepository.markSyncedNow()
+    /** For a real tournament this actually re-fetches every division from PDGA Live, not just a
+     *  timestamp stamp. */
+    fun syncNow() {
+        val tournamentId = settings.value.selectedTournamentId
+        if (tournamentId != null) {
+            liveRosterRepository.loadAllDivisions(tournamentId)
+        } else {
+            viewModelScope.launch { settingsRepository.markSyncedNow() }
+        }
     }
 
     fun loginPdga(username: String, password: String) {
@@ -207,9 +212,15 @@ class DataSourcesViewModel(
 @Composable
 fun DataSourcesScreen(onBack: () -> Unit) {
     val vm = rememberViewModel {
-        DataSourcesViewModel(ServiceLocator.settingsRepository, ServiceLocator.pdgaRepository, ServiceLocator.adgRepository)
+        DataSourcesViewModel(
+            ServiceLocator.settingsRepository,
+            ServiceLocator.pdgaRepository,
+            ServiceLocator.adgRepository,
+            ServiceLocator.liveRosterRepository,
+        )
     }
     val settings by vm.settings.collectAsState()
+    val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -294,19 +305,21 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                 }
             }
 
-            if (vm.pdgaLoggedIn) {
-                item {
-                    Column {
-                        SectionLabel("Sync from PDGA", modifier = Modifier.padding(bottom = 4.dp))
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 14.dp)) {
-                            ToggleRow("Player ratings", "Current PDGA rating for each starter", settings.syncRatings, { vm.setSync(ratings = it) })
-                            ToggleRow("Recent results", "Last 3 sanctioned events per player", settings.syncResults, { vm.setSync(results = it) })
-                            ToggleRow("Membership date", "Year each player joined the PDGA", settings.syncMembership, { vm.setSync(membership = it) })
-                            ToggleRow("Player bios", "Short auto-generated summary per card", settings.syncBios, { vm.setSync(bios = it) })
-                        }
+            item {
+                Column {
+                    SectionLabel("Player Profile Data", modifier = Modifier.padding(bottom = 4.dp))
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 14.dp)) {
+                        ToggleRow(
+                            "Player profiles",
+                            "Member-since date, recent results & auto-bio for every real starter — loaded once per event (no PDGA login needed). Turn off for a faster, bare roster.",
+                            settings.fetchPlayerProfiles,
+                            { vm.setFetchPlayerProfiles(it) },
+                        )
                     }
                 }
+            }
 
+            if (vm.pdgaLoggedIn) {
                 item {
                     Column {
                         SectionLabel("Look Up a Real PDGA Player", modifier = Modifier.padding(bottom = 8.dp))
@@ -529,19 +542,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
             }
 
             item {
-                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp)) {
-                    StepperRow(
-                        label = "Auto-sync frequency",
-                        subtitle = "How often to refresh all connected sources",
-                        value = settings.syncFrequencyMin,
-                        unit = "min",
-                        onDecrement = { vm.setFrequency(settings.syncFrequencyMin - 5) },
-                        onIncrement = { vm.setFrequency(settings.syncFrequencyMin + 5) },
-                    )
-                }
-            }
-
-            item {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(ForestTint)
                         .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -550,7 +550,11 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(Forest))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Last synced ${formatRelative(settings.lastSyncedAtMillis, nowTick)}",
+                        if (settings.selectedTournamentId != null) {
+                            lastLoadedAtMillis?.let { "Last synced ${formatRelative(it, nowTick)}" } ?: "Not synced yet"
+                        } else {
+                            "Last synced ${formatRelative(settings.lastSyncedAtMillis, nowTick)}"
+                        },
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.5.sp),
                         modifier = Modifier.weight(1f),

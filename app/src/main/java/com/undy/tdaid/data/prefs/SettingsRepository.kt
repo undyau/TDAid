@@ -20,11 +20,10 @@ data class AppSettings(
     val pdgaSessionCookieName: String? = null,
     val pdgaSessionCookieValue: String? = null,
     val pdgaUsername: String? = null,
-    val syncRatings: Boolean = true,
-    val syncResults: Boolean = true,
-    val syncMembership: Boolean = true,
-    val syncBios: Boolean = true,
-    val syncFrequencyMin: Int = 15,
+    /** Whether to run the slow, throttled per-player profile fetch (member-since, recent
+     *  results, auto-bio) after a real roster loads — off skips straight to a bare roster
+     *  (name, PDGA #, rating, tee time), useful on a slow connection or in a hurry. */
+    val fetchPlayerProfiles: Boolean = true,
     val adgConnected: Boolean = true,
     val adgShowRank: Boolean = true,
     val lastSyncedAtMillis: Long = System.currentTimeMillis() - 2 * 60 * 1000L,
@@ -44,11 +43,7 @@ private object Keys {
     val PDGA_SESSION_COOKIE_NAME = stringPreferencesKey("pdga_session_cookie_name")
     val PDGA_SESSION_COOKIE_VALUE = stringPreferencesKey("pdga_session_cookie_value")
     val PDGA_USERNAME = stringPreferencesKey("pdga_username")
-    val SYNC_RATINGS = booleanPreferencesKey("sync_ratings")
-    val SYNC_RESULTS = booleanPreferencesKey("sync_results")
-    val SYNC_MEMBERSHIP = booleanPreferencesKey("sync_membership")
-    val SYNC_BIOS = booleanPreferencesKey("sync_bios")
-    val SYNC_FREQUENCY = intPreferencesKey("sync_frequency_min")
+    val FETCH_PLAYER_PROFILES = booleanPreferencesKey("fetch_player_profiles")
     val ADG_CONNECTED = booleanPreferencesKey("adg_connected")
     val ADG_SHOW_RANK = booleanPreferencesKey("adg_show_rank")
     val LAST_SYNCED_AT = longPreferencesKey("last_synced_at")
@@ -63,8 +58,7 @@ interface SettingsRepository {
     suspend fun setAnnounceInterval(minutes: Int)
     suspend fun savePdgaSession(cookieName: String, cookieValue: String, username: String)
     suspend fun clearPdgaSession()
-    suspend fun setSyncToggle(ratings: Boolean? = null, results: Boolean? = null, membership: Boolean? = null, bios: Boolean? = null)
-    suspend fun setSyncFrequency(minutes: Int)
+    suspend fun setFetchPlayerProfiles(enabled: Boolean)
     suspend fun setAdgConnected(connected: Boolean)
     suspend fun setAdgShowRank(show: Boolean)
     suspend fun markSyncedNow()
@@ -80,11 +74,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             pdgaSessionCookieName = prefs[Keys.PDGA_SESSION_COOKIE_NAME],
             pdgaSessionCookieValue = prefs[Keys.PDGA_SESSION_COOKIE_VALUE],
             pdgaUsername = prefs[Keys.PDGA_USERNAME],
-            syncRatings = prefs[Keys.SYNC_RATINGS] ?: true,
-            syncResults = prefs[Keys.SYNC_RESULTS] ?: true,
-            syncMembership = prefs[Keys.SYNC_MEMBERSHIP] ?: true,
-            syncBios = prefs[Keys.SYNC_BIOS] ?: true,
-            syncFrequencyMin = prefs[Keys.SYNC_FREQUENCY] ?: 15,
+            fetchPlayerProfiles = prefs[Keys.FETCH_PLAYER_PROFILES] ?: true,
             adgConnected = prefs[Keys.ADG_CONNECTED] ?: true,
             adgShowRank = prefs[Keys.ADG_SHOW_RANK] ?: true,
             lastSyncedAtMillis = prefs[Keys.LAST_SYNCED_AT] ?: (System.currentTimeMillis() - 2 * 60 * 1000L),
@@ -115,17 +105,8 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         }
     }
 
-    override suspend fun setSyncToggle(ratings: Boolean?, results: Boolean?, membership: Boolean?, bios: Boolean?) {
-        context.dataStore.edit { prefs ->
-            ratings?.let { prefs[Keys.SYNC_RATINGS] = it }
-            results?.let { prefs[Keys.SYNC_RESULTS] = it }
-            membership?.let { prefs[Keys.SYNC_MEMBERSHIP] = it }
-            bios?.let { prefs[Keys.SYNC_BIOS] = it }
-        }
-    }
-
-    override suspend fun setSyncFrequency(minutes: Int) {
-        context.dataStore.edit { it[Keys.SYNC_FREQUENCY] = minutes.coerceIn(5, 60) }
+    override suspend fun setFetchPlayerProfiles(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.FETCH_PLAYER_PROFILES] = enabled }
     }
 
     override suspend fun setAdgConnected(connected: Boolean) {

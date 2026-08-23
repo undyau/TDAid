@@ -5,6 +5,7 @@ import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
+import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
 import com.undy.tdaid.data.remote.PdgaProfileScraper
@@ -16,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -85,6 +87,7 @@ class RealLiveRosterRepository(
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
     private val profileCacheRepository: PlayerProfileCacheRepository,
+    private val settingsRepository: SettingsRepository,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : LiveRosterRepository {
@@ -141,7 +144,9 @@ class RealLiveRosterRepository(
                     _loadingStatus.value = null
                     _loading.value = false
                     enrichWithAdg()
-                    startProfilePrefetch(tournamentId, loaded)
+                    if (settingsRepository.settings.first().fetchPlayerProfiles) {
+                        startProfilePrefetch(tournamentId, loaded)
+                    }
                 }
                 .onFailure { e ->
                     _error.value = e.message ?: "Couldn't load this event's divisions"

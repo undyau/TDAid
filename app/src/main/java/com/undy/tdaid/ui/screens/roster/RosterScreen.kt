@@ -89,8 +89,9 @@ class RosterViewModel(
 ) : ViewModel() {
     private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
-    val liveRoster: StateFlow<LiveRoster?> = liveRosterRepository.current
+    val rosters: StateFlow<Map<String, LiveRoster>> = liveRosterRepository.rosters
     val liveLoading: StateFlow<Boolean> = liveRosterRepository.loading
+    val liveLoadingStatus: StateFlow<String?> = liveRosterRepository.loadingStatus
     val liveError: StateFlow<String?> = liveRosterRepository.error
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
 
@@ -99,12 +100,14 @@ class RosterViewModel(
 
     fun changeRound(r: Int) { round = r.coerceIn(1, 20) }
 
-    fun groupsFor(live: LiveRoster?): List<TeeGroup> =
-        if (live != null && live.division == divisionCode) live.groups else demoGroups
+    fun groupsFor(rosters: Map<String, LiveRoster>): List<TeeGroup> = rosters[divisionCode]?.groups ?: demoGroups
 
+    /** Manual fallback — normally every division is already loaded automatically right after the
+     *  TD picks the tournament, but this lets them retry a division that failed, or reload at a
+     *  different round than [LiveRosterRepository.loadAllDivisions] auto-picked. */
     fun loadRealRoster() {
         val tournamentId = settings.value.selectedTournamentId ?: return
-        viewModelScope.launch { liveRosterRepository.load(tournamentId, divisionCode, round) }
+        liveRosterRepository.load(tournamentId, divisionCode, round)
     }
 
     private val pdgaLiveMap = mutableStateMapOf<String, PdgaLiveState>()
@@ -149,12 +152,13 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
     }
     var expandedId by remember { mutableStateOf<String?>(null) }
     val settings by vm.settings.collectAsState()
-    val liveRoster by vm.liveRoster.collectAsState()
+    val rosters by vm.rosters.collectAsState()
     val liveLoading by vm.liveLoading.collectAsState()
+    val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
     val liveError by vm.liveError.collectAsState()
-    val activeLiveRoster = liveRoster
-    val groups = vm.groupsFor(activeLiveRoster)
-    val isLive = activeLiveRoster != null && activeLiveRoster.division == divisionCode
+    val activeLiveRoster = rosters[divisionCode]
+    val groups = vm.groupsFor(rosters)
+    val isLive = activeLiveRoster != null
     val totalPlayers = groups.sumOf { it.players.size }
 
     Column(
@@ -194,23 +198,31 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                             style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
                             color = Ink,
                         )
-                        Text(
-                            "Load real starters & tee times for $divisionCode from PDGA Live — the demo roster below is shown until then.",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                            color = InkMuted,
-                        )
-                        StepperRow(
-                            label = "Round",
-                            subtitle = "Which round to load",
-                            value = vm.round,
-                            unit = "",
-                            onDecrement = { vm.changeRound(vm.round - 1) },
-                            onIncrement = { vm.changeRound(vm.round + 1) },
-                        )
-                        OutlineButton(
-                            text = if (liveLoading) "Loading…" else "Load Real Starters & Tee Times",
-                            onClick = vm::loadRealRoster,
-                        )
+                        if (liveLoading) {
+                            Text(
+                                liveLoadingStatus ?: "Loading…",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = InkMuted,
+                            )
+                        } else {
+                            Text(
+                                "$divisionCode isn't loaded yet — the demo roster below is shown until then.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = InkMuted,
+                            )
+                            StepperRow(
+                                label = "Round",
+                                subtitle = "Which round to load",
+                                value = vm.round,
+                                unit = "",
+                                onDecrement = { vm.changeRound(vm.round - 1) },
+                                onIncrement = { vm.changeRound(vm.round + 1) },
+                            )
+                            OutlineButton(
+                                text = "Load Real Starters & Tee Times",
+                                onClick = vm::loadRealRoster,
+                            )
+                        }
                         liveError?.let {
                             Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
                         }

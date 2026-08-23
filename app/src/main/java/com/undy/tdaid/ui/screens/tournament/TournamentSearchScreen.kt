@@ -39,6 +39,7 @@ import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaEventResult
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PrimaryButton
@@ -80,6 +81,7 @@ private fun formatDateRange(startDate: String, endDate: String): String {
 class TournamentSearchViewModel(
     private val pdgaRepository: PdgaRepository,
     private val settingsRepository: SettingsRepository,
+    private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
 
@@ -112,6 +114,10 @@ class TournamentSearchViewModel(
             val dates = formatDateRange(event.startDate, event.endDate)
             val location = listOfNotNull(event.city, event.stateProv ?: event.country).joinToString(", ").ifEmpty { null }
             settingsRepository.setSelectedTournament(event.tournamentName, dates, location, event.tournamentId)
+            // Only clear here — Dashboard notices the cache is empty for this tournament and
+            // triggers the actual load itself, since it (unlike this screen) is still around to
+            // see it through, whether this is a fresh selection or a restart with one already set.
+            liveRosterRepository.clear()
             onDone()
         }
     }
@@ -119,6 +125,7 @@ class TournamentSearchViewModel(
     fun useDemoTournament(onDone: () -> Unit) {
         viewModelScope.launch {
             settingsRepository.clearSelectedTournament()
+            liveRosterRepository.clear()
             onDone()
         }
     }
@@ -126,7 +133,9 @@ class TournamentSearchViewModel(
 
 @Composable
 fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
-    val vm = rememberViewModel { TournamentSearchViewModel(ServiceLocator.pdgaRepository, ServiceLocator.settingsRepository) }
+    val vm = rememberViewModel {
+        TournamentSearchViewModel(ServiceLocator.pdgaRepository, ServiceLocator.settingsRepository, ServiceLocator.liveRosterRepository)
+    }
 
     Column(
         Modifier.fillMaxSize().background(BgPaper).windowInsetsPadding(WindowInsets.systemBars),
@@ -196,7 +205,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
                     Spacer(Modifier.width(0.dp))
                     OutlineButton(text = "Use Demo Tournament (Ridge Valley Open)", onClick = { vm.useDemoTournament(onBack) })
                     Text(
-                        "Picking a real event updates its name, dates and location on the dashboard. Open a division from there to load its real starters & tee times from PDGA Live.",
+                        "Picking a real event loads its real divisions, starters and tee times from PDGA Live automatically — give it a few seconds after returning to the dashboard.",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                         color = InkMuted,
                     )

@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,8 @@ import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.Division
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
+import com.undy.tdaid.data.remote.PdgaDivisionMeta
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
@@ -66,13 +69,28 @@ import kotlinx.coroutines.launch
 class DashboardViewModel(
     private val tournamentRepository: TournamentRepository,
     private val settingsRepository: SettingsRepository,
+    private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     val tournamentName get() = tournamentRepository.tournamentName
     val roundLabel get() = tournamentRepository.roundLabel
     val roundDate get() = tournamentRepository.roundDate
-    val divisions: List<Division> = tournamentRepository.divisions()
+    private val demoDivisions: List<Division> = tournamentRepository.divisions()
 
-    var selectedDivision by mutableStateOf(divisions.firstOrNull()?.code ?: "")
+    val eventDivisions = liveRosterRepository.eventDivisions
+    val liveLoading = liveRosterRepository.loading
+    val liveLoadingStatus = liveRosterRepository.loadingStatus
+    val liveError = liveRosterRepository.error
+
+    /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
+     *  has found them for the selected event — the demo list until then. */
+    fun divisionsFor(eventDivisions: List<PdgaDivisionMeta>): List<Division> =
+        if (eventDivisions.isNotEmpty()) {
+            eventDivisions.map { Division(it.code, it.name, starterCount = it.playerCount, matchedCount = it.playerCount) }
+        } else {
+            demoDivisions
+        }
+
+    var selectedDivision by mutableStateOf(demoDivisions.firstOrNull()?.code ?: "")
         private set
 
     val settings = settingsRepository.settings.stateIn(
@@ -101,9 +119,33 @@ fun RoundDashboardScreen(
     onOpenRoster: (String) -> Unit,
     onSelectTournament: () -> Unit,
 ) {
-    val vm = rememberViewModel { DashboardViewModel(ServiceLocator.tournamentRepository, ServiceLocator.settingsRepository) }
+    val vm = rememberViewModel {
+        DashboardViewModel(ServiceLocator.tournamentRepository, ServiceLocator.settingsRepository, ServiceLocator.liveRosterRepository)
+    }
     val settings by vm.settings.collectAsState()
+    val eventDivisions by vm.eventDivisions.collectAsState()
+    val liveLoading by vm.liveLoading.collectAsState()
+    val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
+    val liveError by vm.liveError.collectAsState()
+    val divisions = vm.divisionsFor(eventDivisions)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(divisions) {
+        if (divisions.none { it.code == vm.selectedDivision }) {
+            divisions.firstOrNull()?.let { vm.selectDivision(it.code) }
+        }
+    }
+
+    // Auto-loads every real division's starters & tee times for the selected event — right after
+    // picking one, and also after a fresh app restart with one already selected (the in-memory
+    // cache doesn't survive that). Guarded by eventDivisions/liveError so it fires once per real
+    // selection rather than re-triggering on every recomposition or retry-looping on failure.
+    val tournamentId = settings.selectedTournamentId
+    LaunchedEffect(tournamentId, eventDivisions, liveLoading, liveError) {
+        if (tournamentId != null && eventDivisions.isEmpty() && !liveLoading && liveError == null) {
+            ServiceLocator.liveRosterRepository.loadAllDivisions(tournamentId)
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().background(BgPaper)
@@ -153,12 +195,29 @@ fun RoundDashboardScreen(
                         Icon(Icons.Filled.ExpandMore, contentDescription = "Select tournament", tint = InkMuted)
                     }
                     if (realTournament) {
-                        Text(
-                            "Real PDGA event · open a division to load its real starters & tee times",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
-                            color = InkMuted,
-                            modifier = Modifier.padding(top = 5.dp, start = 4.dp),
-                        )
+                        Row(Modifier.padding(top = 5.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                when {
+                                    liveLoadingStatus != null -> "Real PDGA event · $liveLoadingStatus"
+                                    eventDivisions.isNotEmpty() -> "Real PDGA event · real divisions, starters & tee times loaded"
+                                    liveError != null -> "Real PDGA event · $liveError"
+                                    else -> "Real PDGA event · loading real divisions…"
+                                },
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                color = InkMuted,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (liveError != null && settings.selectedTournamentId != null) {
+                                Text(
+                                    "Retry",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 10.5.sp),
+                                    color = ForestDark,
+                                    modifier = Modifier.clickable {
+                                        ServiceLocator.liveRosterRepository.loadAllDivisions(settings.selectedTournamentId!!)
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -187,9 +246,10 @@ fun RoundDashboardScreen(
                 Column {
                     SectionLabel("Divisions — ${vm.roundDate}", modifier = Modifier.padding(bottom = 10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        vm.divisions.forEach { division ->
+                        divisions.forEach { division ->
                             DivisionRow(
                                 division = division,
+                                real = eventDivisions.isNotEmpty(),
                                 selected = division.code == vm.selectedDivision,
                                 onClick = { vm.selectDivision(division.code); onOpenRoster(division.code) },
                             )
@@ -230,7 +290,7 @@ fun RoundDashboardScreen(
 }
 
 @Composable
-private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Unit) {
+private fun DivisionRow(division: Division, real: Boolean, selected: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -248,7 +308,11 @@ private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Un
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(division.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp), color = Ink)
-            Text("${division.matchedCount}/${division.starterCount} matched to PDGA", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
+            Text(
+                if (real) "${division.starterCount} real starter${if (division.starterCount == 1) "" else "s"}" else "${division.matchedCount}/${division.starterCount} matched to PDGA",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                color = InkMuted,
+            )
         }
         Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = InkMuted)
     }

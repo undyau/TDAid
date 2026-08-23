@@ -57,6 +57,20 @@ data class PdgaLiveResult(
     val toPar: Int?,
 )
 
+/** One real division running at a tournament, as published by PDGA Live. */
+data class PdgaDivisionMeta(
+    val code: String,
+    val name: String,
+    val playerCount: Int,
+)
+
+/** A tournament's real division list and current round, as published by PDGA Live — lets the
+ *  app discover what to load right after a TD picks a real event, instead of guessing. */
+data class PdgaEventMeta(
+    val divisions: List<PdgaDivisionMeta>,
+    val latestRound: Int,
+)
+
 class PdgaApiException(message: String) : IOException(message)
 
 /**
@@ -201,4 +215,35 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                 }
             }
         }
+
+    /** Real, unauthenticated division list + current round for a tournament — found the same way
+     *  as [fetchLiveResults] (`live_results_fetch_event`), so the app can discover what to load
+     *  right after a TD picks a real event instead of guessing division codes or a round number. */
+    suspend fun fetchEventMeta(tournamentId: String): PdgaEventMeta = withContext(Dispatchers.IO) {
+        val url = "$LIVE_BASE_URL/live_results_fetch_event?TournID=$tournamentId"
+        val request = Request.Builder().url(url).build()
+
+        client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw PdgaApiException("Event lookup failed (HTTP ${response.code}): ${text.take(200)}")
+            }
+            val json = try {
+                JSONObject(text)
+            } catch (e: Exception) {
+                throw PdgaApiException("Unexpected event response: ${text.take(200)}")
+            }
+            val data = json.optJSONObject("data") ?: throw PdgaApiException("Event lookup returned no data")
+            val divisionsJson = data.optJSONArray("Divisions")
+            val divisions = if (divisionsJson == null) emptyList() else (0 until divisionsJson.length()).map { i ->
+                val d = divisionsJson.getJSONObject(i)
+                PdgaDivisionMeta(
+                    code = d.optString("Division").trim(),
+                    name = d.optString("DivisionName").trim(),
+                    playerCount = d.optInt("Players"),
+                )
+            }
+            PdgaEventMeta(divisions = divisions, latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1))
+        }
+    }
 }

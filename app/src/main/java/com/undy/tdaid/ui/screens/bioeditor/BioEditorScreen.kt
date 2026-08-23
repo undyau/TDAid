@@ -78,9 +78,9 @@ class BioEditorViewModel(
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
 ) : ViewModel() {
-    // A player might be a demo starter or a real one loaded from PDGA Live on Roster/Field Mode
-    // — check both, since this screen can be reached from either.
-    val player: Player? = (tournamentRepository.teeGroups() + liveRosterRepository.current.value?.groups.orEmpty())
+    // A player might be a demo starter or a real one loaded from PDGA Live for any division
+    // — check all of them, since this screen can be reached from any loaded division.
+    val player: Player? = (tournamentRepository.teeGroups() + liveRosterRepository.rosters.value.values.flatMap { it.groups })
         .flatMap { it.players }
         .find { it.id == playerId }
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn

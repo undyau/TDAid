@@ -86,13 +86,13 @@ class NowAnnouncingViewModel(
     liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
-    val liveRoster = liveRosterRepository.current
-    val groups = liveRoster
-        .map { live -> if (live != null && live.division == divisionCode) live.groups else demoGroups }
+    val rosters = liveRosterRepository.rosters
+    val groups = rosters
+        .map { byDivision -> byDivision[divisionCode]?.groups ?: demoGroups }
         .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
 
-    fun roundLabel(liveRoster: LiveRoster?): String =
-        if (liveRoster != null && liveRoster.division == divisionCode) "RD ${liveRoster.round} · Live" else "RD 2"
+    fun roundLabel(rosters: Map<String, LiveRoster>): String =
+        rosters[divisionCode]?.let { "RD ${it.round} · Live" } ?: "RD 2"
 
     var currentIndex by mutableStateOf(0)
         private set
@@ -119,7 +119,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
     }
     val context = LocalContext.current
     val groups by vm.groups.collectAsState()
-    val liveRoster by vm.liveRoster.collectAsState()
+    val rosters by vm.rosters.collectAsState()
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
     // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
@@ -147,7 +147,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
                 Text("Offline · cached 7:42 AM", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = InkMuted)
             }
             Spacer(Modifier.width(8.dp))
-            Text("$divisionCode · ${vm.roundLabel(liveRoster)}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
+            Text("$divisionCode · ${vm.roundLabel(rosters)}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenAlert) {
                 Icon(Icons.Filled.Notifications, contentDescription = "Tee-time alert", tint = ForestDark, modifier = Modifier.size(19.dp))
             }

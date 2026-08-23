@@ -212,12 +212,14 @@ class RealLiveRosterRepository(
                     TeeGroup(
                         time = teeTime.ifEmpty { "TBD" },
                         players = players.map { r ->
+                            val homeLocation = listOfNotNull(r.city, r.country).joinToString(", ").ifEmpty { null }
                             Player(
                                 id = "pdga-${r.pdgaNumber}",
                                 name = "${r.firstName} ${r.lastName}".trim(),
-                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—"),
+                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
                                 recentResult = "—",
-                                bio = "Real PDGA Live starter — full profile loading in the background.",
+                                bio = describePlayer(homeLocation = homeLocation)
+                                    ?: "Real PDGA Live starter — full profile loading in the background.",
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r.pdgaNumber] ?: "—") },
                             )
                         },
@@ -342,7 +344,7 @@ class RealLiveRosterRepository(
                             p.copy(
                                 pdga = p.pdga.copy(memberSince = profile.memberSince ?: p.pdga.memberSince),
                                 recentResult = profile.recentResult ?: p.recentResult,
-                                bio = describePlayer(profile) ?: p.bio,
+                                bio = describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
                             )
                         }
                     },
@@ -352,16 +354,17 @@ class RealLiveRosterRepository(
         }
     }
 
-    private fun describePlayer(profile: PdgaPlayerProfile): String? {
+    private fun describePlayer(profile: PdgaPlayerProfile? = null, homeLocation: String? = null): String? {
         val facts = mutableListOf<String>()
-        profile.memberSince?.let { facts.add("PDGA member since $it") }
-        profile.recentResult?.let { facts.add("last event: $it") }
+        homeLocation?.let { facts.add("From $it") }
+        profile?.memberSince?.let { facts.add("PDGA member since $it") }
+        profile?.recentResult?.let { facts.add("last event: $it") }
         // Skip a fact that's already covered by one already listed — most players' best or most
         // recent win this year IS their most recent event, and repeating it reads oddly.
-        if (profile.lastWin != null && profile.lastWin != profile.recentResult) {
+        if (profile?.lastWin != null && profile.lastWin != profile.recentResult) {
             facts.add("last win: ${profile.lastWin}")
         }
-        if (profile.bestResultThisYear != null &&
+        if (profile?.bestResultThisYear != null &&
             profile.bestResultThisYear != profile.recentResult &&
             profile.bestResultThisYear != profile.lastWin
         ) {

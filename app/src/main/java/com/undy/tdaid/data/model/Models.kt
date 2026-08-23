@@ -6,6 +6,9 @@ data class PdgaProfile(
     /** Null when PDGA hasn't assigned this player a rating yet, e.g. a new or inactive member. */
     val rating: Int?,
     val memberSince: String,
+    /** City/country as reported by PDGA — null for demo players and any real player who hasn't
+     *  listed one. */
+    val homeLocation: String? = null,
 )
 
 /** Optional ranking pulled from the Australian Disc Golf (ADG) Tour Leaderboard. Null if unranked there. */

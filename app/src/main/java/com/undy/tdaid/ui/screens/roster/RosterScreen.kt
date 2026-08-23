@@ -284,7 +284,7 @@ private fun PlayerRow(
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
                 Text(player.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp), color = Ink)
-                Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = InkMuted)
+                Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = InkMuted)
             }
             Icon(Icons.Filled.CheckCircle, contentDescription = "Cached", tint = Forest, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))

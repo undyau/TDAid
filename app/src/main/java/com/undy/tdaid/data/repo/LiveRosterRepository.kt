@@ -1,5 +1,6 @@
 package com.undy.tdaid.data.repo
 
+import com.undy.tdaid.data.local.PlayerProfileCacheRepository
 import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
@@ -79,6 +80,7 @@ interface LiveRosterRepository {
 class RealLiveRosterRepository(
     private val pdgaRepository: PdgaRepository,
     private val adgRepository: AdgRepository,
+    private val profileCacheRepository: PlayerProfileCacheRepository,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : LiveRosterRepository {
@@ -131,7 +133,7 @@ class RealLiveRosterRepository(
                     _loadingStatus.value = null
                     _loading.value = false
                     enrichWithAdg()
-                    startProfilePrefetch(loaded)
+                    startProfilePrefetch(tournamentId, loaded)
                 }
                 .onFailure { e ->
                     _error.value = e.message ?: "Couldn't load this event's divisions"
@@ -166,7 +168,7 @@ class RealLiveRosterRepository(
                             Player(
                                 id = "pdga-${r.pdgaNumber}",
                                 name = "${r.firstName} ${r.lastName}".trim(),
-                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating ?: 0, memberSince = "—"),
+                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—"),
                                 recentResult = "—",
                                 bio = "Real PDGA Live starter — full profile loading in the background.",
                             )
@@ -200,25 +202,38 @@ class RealLiveRosterRepository(
         }
     }
 
-    /** Fetches each real starter's public PDGA profile page for their member-since date and most
-     *  recent result — one HTTP request per player, so this is paced at [PROFILE_PREFETCH_DELAY_MS]
-     *  apart (pdga.com's own stated Crawl-delay) rather than fired all at once. Works through
-     *  players in tee-time order across every division, soonest groups first, so a group's data
-     *  is ready well before it's actually announced. */
-    private fun startProfilePrefetch(loaded: Map<String, LiveRoster>) {
+    /** Applies any profiles already cached on disk for this tournament instantly, then fetches
+     *  the rest from each real starter's public PDGA profile page — one HTTP request per player,
+     *  so those are paced at [PROFILE_PREFETCH_DELAY_MS] apart (pdga.com's own stated Crawl-delay)
+     *  rather than fired all at once. Works through players in tee-time order across every
+     *  division, soonest groups first, so a group's data is ready well before it's announced.
+     *  Reloading the same tournament later (e.g. after an app restart) is then a pure cache hit —
+     *  nothing gets re-fetched unless the tournament itself changes. */
+    private fun startProfilePrefetch(tournamentId: String, loaded: Map<String, LiveRoster>) {
         prefetchJob = scope.launch {
             data class Target(val teeTime: String, val division: String, val player: Player)
 
-            val queue = loaded.entries
+            val allTargets = loaded.entries
                 .flatMap { (division, roster) -> roster.groups.flatMap { g -> g.players.map { Target(g.time, division, it) } } }
                 .sortedWith(compareBy({ it.teeTime.isEmpty() }, { it.teeTime }))
-            if (queue.isEmpty()) return@launch
+            if (allTargets.isEmpty()) return@launch
 
-            queue.forEachIndexed { index, target ->
-                _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${queue.size})"
+            val cached = profileCacheRepository.get(tournamentId)
+            val toFetch = allTargets.filter { target ->
+                val hit = cached[target.player.pdga.pdgaNumber]
+                if (hit != null) mergeProfile(target.division, target.player.id, hit)
+                hit == null
+            }
+            if (toFetch.isEmpty()) return@launch
+
+            toFetch.forEachIndexed { index, target ->
+                _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${toFetch.size})"
                 runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber, target.division) }
-                    .onSuccess { profile -> mergeProfile(target.division, target.player.id, profile) }
-                if (index < queue.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
+                    .onSuccess { profile ->
+                        mergeProfile(target.division, target.player.id, profile)
+                        profileCacheRepository.save(tournamentId, target.player.pdga.pdgaNumber, profile)
+                    }
+                if (index < toFetch.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
             }
             _profilePrefetchStatus.value = null
         }
@@ -236,7 +251,7 @@ class RealLiveRosterRepository(
                             p.copy(
                                 pdga = p.pdga.copy(memberSince = profile.memberSince ?: p.pdga.memberSince),
                                 recentResult = profile.recentResult ?: p.recentResult,
-                                bio = describePlayer(profile.memberSince, profile.recentResult) ?: p.bio,
+                                bio = describePlayer(profile) ?: p.bio,
                             )
                         }
                     },
@@ -246,11 +261,21 @@ class RealLiveRosterRepository(
         }
     }
 
-    private fun describePlayer(memberSince: String?, recentResult: String?): String? {
-        val facts = listOfNotNull(
-            memberSince?.let { "PDGA member since $it" },
-            recentResult?.let { "most recent result: $it" },
-        )
+    private fun describePlayer(profile: PdgaPlayerProfile): String? {
+        val facts = mutableListOf<String>()
+        profile.memberSince?.let { facts.add("PDGA member since $it") }
+        profile.recentResult?.let { facts.add("last event: $it") }
+        // Skip a fact that's already covered by one already listed — most players' best or most
+        // recent win this year IS their most recent event, and repeating it reads oddly.
+        if (profile.lastWin != null && profile.lastWin != profile.recentResult) {
+            facts.add("last win: ${profile.lastWin}")
+        }
+        if (profile.bestResultThisYear != null &&
+            profile.bestResultThisYear != profile.recentResult &&
+            profile.bestResultThisYear != profile.lastWin
+        ) {
+            facts.add("best result this year: ${profile.bestResultThisYear}")
+        }
         return facts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.plus(".")
     }
 }

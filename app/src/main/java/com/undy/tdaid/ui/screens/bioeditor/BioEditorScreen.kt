@@ -223,7 +223,7 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
                         Text(player.name, style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp), color = Ink)
-                        Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted)
+                        Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted)
                     }
                     PillTag(text = "From PDGA", containerColor = SurfaceVariant, contentColor = InkMuted)
                 }

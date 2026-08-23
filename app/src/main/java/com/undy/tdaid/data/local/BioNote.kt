@@ -51,9 +51,10 @@ interface BioNoteDao {
     suspend fun upsert(entity: BioNoteEntity)
 }
 
-@Database(entities = [BioNoteEntity::class], version = 1, exportSchema = true)
+@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 3, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
+    abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -63,7 +64,11 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "tdaid.db",
-            ).build().also { instance = it }
+            )
+                // No migration is worth writing yet for a pre-release dev build with only local
+                // test data — revisit once this ships with real user data to preserve.
+                .fallbackToDestructiveMigration(dropAllTables = true)
+                .build().also { instance = it }
         }
     }
 }

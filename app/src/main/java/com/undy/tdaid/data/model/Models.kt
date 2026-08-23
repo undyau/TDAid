@@ -3,7 +3,8 @@ package com.undy.tdaid.data.model
 /** A player's core PDGA identity facts — fetched, not editable in-app. */
 data class PdgaProfile(
     val pdgaNumber: String,
-    val rating: Int,
+    /** Null when PDGA hasn't assigned this player a rating yet, e.g. a new or inactive member. */
+    val rating: Int?,
     val memberSince: String,
 )
 

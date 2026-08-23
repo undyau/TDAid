@@ -4,6 +4,7 @@ import android.content.Context
 import com.undy.tdaid.data.local.AppDatabase
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.RoomBioNotesRepository
+import com.undy.tdaid.data.local.RoomPlayerProfileCacheRepository
 import com.undy.tdaid.data.prefs.DataStoreSettingsRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
@@ -38,7 +39,9 @@ object ServiceLocator {
         kotlinx.coroutines.runBlocking { realPdgaRepository.restoreSession() }
         pdgaRepository = realPdgaRepository
         adgRepository = RealAdgRepository()
-        liveRosterRepository = RealLiveRosterRepository(pdgaRepository, adgRepository)
-        bioNotesRepository = RoomBioNotesRepository(AppDatabase.get(context).bioNoteDao())
+        val database = AppDatabase.get(context)
+        val profileCacheRepository = RoomPlayerProfileCacheRepository(database.playerProfileCacheDao())
+        liveRosterRepository = RealLiveRosterRepository(pdgaRepository, adgRepository, profileCacheRepository)
+        bioNotesRepository = RoomBioNotesRepository(database.bioNoteDao())
     }
 }

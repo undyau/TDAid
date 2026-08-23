@@ -297,7 +297,7 @@ private fun BioSheetContent(player: Player) {
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Text(
-                "Rating ${player.pdga.rating}",
+                "Rating ${player.pdga.rating ?: "—"}",
                 color = ForestDark,
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 12.sp),
                 modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(com.undy.tdaid.ui.theme.ForestTint).padding(horizontal = 11.dp, vertical = 7.dp),

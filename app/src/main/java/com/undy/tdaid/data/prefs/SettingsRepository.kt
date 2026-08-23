@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.map
 private val Context.dataStore by preferencesDataStore(name = "td_settings")
 
 data class AppSettings(
-    val announceIntervalMin: Int = 3,
+    val announceIntervalMin: Int = 5,
     /** A previously saved PDGA login session — lets the TD skip re-entering credentials on every
      *  app restart. Null means logged out. If the saved cookie has since expired, the next real
      *  PDGA API call just fails and the login form reappears, same as any expired web session. */
@@ -71,7 +71,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
 
     override val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
-            announceIntervalMin = prefs[Keys.ANNOUNCE_INTERVAL] ?: 3,
+            announceIntervalMin = prefs[Keys.ANNOUNCE_INTERVAL] ?: 5,
             pdgaSessionCookieName = prefs[Keys.PDGA_SESSION_COOKIE_NAME],
             pdgaSessionCookieValue = prefs[Keys.PDGA_SESSION_COOKIE_VALUE],
             pdgaUsername = prefs[Keys.PDGA_USERNAME],

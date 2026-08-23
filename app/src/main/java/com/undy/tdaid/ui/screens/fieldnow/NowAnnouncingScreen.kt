@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import com.undy.tdaid.data.ServiceLocator
+import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.asScoreLabel
@@ -124,6 +125,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
     val groups by vm.groups.collectAsState()
     val rosters by vm.rosters.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
+    val settings by ServiceLocator.settingsRepository.settings.collectAsState(initial = AppSettings())
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
     // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
@@ -176,7 +178,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
                         Text("NOW ANNOUNCING", color = Accent, style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp))
                         Text(current.time, color = Cream, style = MaterialTheme.typography.headlineLarge)
                         Text(
-                            if (vm.done(groups)) "Final card of the division" else "Announcing now · 3 min before start",
+                            if (vm.done(groups)) "Final card of the division" else "Announcing now · ${settings.announceIntervalMin} min before start",
                             color = Cream.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             modifier = Modifier.padding(top = 2.dp, bottom = 13.dp),

@@ -92,6 +92,19 @@ fun RoundStatRow(round1: RoundResult, overall: TournamentStanding, modifier: Mod
     }
 }
 
+/** Just the real live standing — used for a real PDGA Live player, where per-round stroke counts
+ *  aren't cleanly available but the real cumulative score-to-par and position are. */
+@Composable
+fun OverallStatRow(overall: TournamentStanding, modifier: Modifier = Modifier) {
+    StatBox(
+        label = "OVERALL",
+        value = overall.scoreToPar.asScoreLabel(),
+        detail = "· ${overall.position}",
+        score = overall.scoreToPar,
+        modifier = modifier.fillMaxWidth(),
+    )
+}
+
 @Composable
 private fun StatBox(label: String, value: String, detail: String, score: Int, modifier: Modifier = Modifier) {
     Column(

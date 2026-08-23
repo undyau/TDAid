@@ -60,6 +60,7 @@ import com.undy.tdaid.ui.PdgaLiveState
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PillTag
+import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.rememberViewModel
@@ -308,6 +309,8 @@ private fun PlayerRow(
                 )
                 if (player.round1 != null && player.overall != null) {
                     RoundStatRow(round1 = player.round1, overall = player.overall)
+                } else if (player.overall != null) {
+                    OverallStatRow(player.overall)
                 }
                 AdgLine(player.adg)
                 LiveDataCheck(

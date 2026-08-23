@@ -5,8 +5,10 @@ import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
+import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
+import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
 import com.undy.tdaid.data.remote.PdgaProfileScraper
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +66,13 @@ interface LiveRosterRepository {
      *  answer to "how stale is this cached data", for screens that used to show a fixed fake
      *  timestamp. Null until the first successful load. */
     val lastLoadedAtMillis: StateFlow<Long?>
+    /** Which tournament [rosters]/[eventDivisions] actually belong to — the identity check a
+     *  caller should use to decide whether to (re)load, rather than just "is there some data
+     *  present". Settings can briefly lag behind a rapid tournament switch; comparing against
+     *  the tournament actually loaded (instead of merely "did loading happen") means a stale load
+     *  self-corrects on the next check instead of leaving the wrong tournament's data on screen
+     *  indefinitely. Null until the first successful load. */
+    val loadedTournamentId: StateFlow<String?>
     val error: StateFlow<String?>
 
     /** Loads one division/round on demand — used for a manual reload, or a round the TD picks
@@ -103,19 +112,31 @@ class RealLiveRosterRepository(
     override val profilePrefetchStatus: StateFlow<String?> = _profilePrefetchStatus.asStateFlow()
     private val _lastLoadedAtMillis = MutableStateFlow<Long?>(null)
     override val lastLoadedAtMillis: StateFlow<Long?> = _lastLoadedAtMillis.asStateFlow()
+    private val _loadedTournamentId = MutableStateFlow<String?>(null)
+    override val loadedTournamentId: StateFlow<String?> = _loadedTournamentId.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     override val error: StateFlow<String?> = _error.asStateFlow()
 
+    // Tracks whichever full-roster fetch is currently running (load() or loadAllDivisions()) so
+    // starting a new one always cancels the old — without this, switching tournaments while a
+    // slow previous load is still in flight let the stale one "win" the race and silently
+    // overwrite the new tournament's roster with the old one's, well after the UI had already
+    // moved on and looked correct. Confirmed live: the header correctly showed the newly-picked
+    // event, but the roster underneath was still the previous event's.
+    private var loadJob: Job? = null
+    private var adgJob: Job? = null
     private var prefetchJob: Job? = null
 
     override fun load(tournamentId: String, division: String, round: Int) {
-        scope.launch {
+        loadJob?.cancel()
+        loadJob = scope.launch {
             _loading.value = true
             _error.value = null
             fetchOneDivision(tournamentId, division, round)
                 .onSuccess { roster ->
                     _rosters.update { it + (division to roster) }
                     _lastLoadedAtMillis.value = System.currentTimeMillis()
+                    _loadedTournamentId.value = tournamentId
                     if (roster.groups.isEmpty()) _error.value = "No tee times published yet for this round"
                 }
                 .onFailure { e -> _error.value = e.message ?: "Live lookup failed" }
@@ -124,8 +145,10 @@ class RealLiveRosterRepository(
     }
 
     override fun loadAllDivisions(tournamentId: String) {
+        loadJob?.cancel()
+        adgJob?.cancel()
         prefetchJob?.cancel()
-        scope.launch {
+        loadJob = scope.launch {
             _loading.value = true
             _error.value = null
             _loadingStatus.value = "Finding real divisions…"
@@ -141,6 +164,7 @@ class RealLiveRosterRepository(
                     }
                     _rosters.value = loaded
                     _lastLoadedAtMillis.value = System.currentTimeMillis()
+                    _loadedTournamentId.value = tournamentId
                     _loadingStatus.value = null
                     _loading.value = false
                     enrichWithAdg()
@@ -157,6 +181,10 @@ class RealLiveRosterRepository(
     }
 
     override fun clear() {
+        loadJob?.cancel()
+        loadJob = null
+        adgJob?.cancel()
+        adgJob = null
         prefetchJob?.cancel()
         prefetchJob = null
         _rosters.value = emptyMap()
@@ -164,10 +192,12 @@ class RealLiveRosterRepository(
         _error.value = null
         _profilePrefetchStatus.value = null
         _lastLoadedAtMillis.value = null
+        _loadedTournamentId.value = null
     }
 
     private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> =
         pdgaRepository.fetchLiveResults(tournamentId, division, round).map { results ->
+            val positions = standingsFor(results)
             // Real foursomes group by TeeTime, not the API's CardNum (which turned out to be
             // a ~30-player wave/pod id, not a playing group — confirmed against live data).
             // Groups with no published tee time yet sort last, not first.
@@ -185,6 +215,7 @@ class RealLiveRosterRepository(
                                 pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—"),
                                 recentResult = "—",
                                 bio = "Real PDGA Live starter — full profile loading in the background.",
+                                overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r.pdgaNumber] ?: "—") },
                             )
                         },
                     )
@@ -192,10 +223,40 @@ class RealLiveRosterRepository(
             LiveRoster(tournamentId, division, round, groups)
         }
 
+    /** Real standings computed from the same live results already fetched — no extra call. Ties
+     *  share a rank with a "T" prefix and the next distinct score skips ahead, same as a real
+     *  disc golf leaderboard (two players tied for 2nd are both "T2nd", the next is "4th"). */
+    private fun standingsFor(results: List<PdgaLiveResult>): Map<Int, String> {
+        val scored = results.filter { it.toPar != null }.sortedBy { it.toPar }
+        val positions = mutableMapOf<Int, String>()
+        var rank = 0
+        var previousScore: Int? = null
+        scored.forEachIndexed { index, r ->
+            if (r.toPar != previousScore) {
+                rank = index + 1
+                previousScore = r.toPar
+            }
+            val tied = scored.count { it.toPar == r.toPar } > 1
+            positions[r.pdgaNumber] = (if (tied) "T" else "") + rank.asOrdinal()
+        }
+        return positions
+    }
+
+    private fun Int.asOrdinal(): String {
+        val suffix = when {
+            this % 100 in 11..13 -> "th"
+            this % 10 == 1 -> "st"
+            this % 10 == 2 -> "nd"
+            this % 10 == 3 -> "rd"
+            else -> "th"
+        }
+        return "$this$suffix"
+    }
+
     /** One request for the whole ADG Tour leaderboard, matched to real starters by name — cheap
      *  enough to just do in bulk, unlike the PDGA per-player profile fetch below. */
     private fun enrichWithAdg() {
-        scope.launch {
+        adgJob = scope.launch {
             adgRepository.fetchLeaderboard().onSuccess { rows ->
                 if (rows.isEmpty()) return@onSuccess
                 _rosters.update { current ->

@@ -81,6 +81,7 @@ class DashboardViewModel(
     val liveLoadingStatus = liveRosterRepository.loadingStatus
     val profilePrefetchStatus = liveRosterRepository.profilePrefetchStatus
     val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
+    val loadedTournamentId = liveRosterRepository.loadedTournamentId
     val liveError = liveRosterRepository.error
 
     /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
@@ -138,6 +139,7 @@ fun RoundDashboardScreen(
     val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
     val profilePrefetchStatus by vm.profilePrefetchStatus.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
+    val loadedTournamentId by vm.loadedTournamentId.collectAsState()
     val liveError by vm.liveError.collectAsState()
     val divisions = vm.divisionsFor(eventDivisions)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -150,11 +152,15 @@ fun RoundDashboardScreen(
 
     // Auto-loads every real division's starters & tee times for the selected event — right after
     // picking one, and also after a fresh app restart with one already selected (the in-memory
-    // cache doesn't survive that). Guarded by eventDivisions/liveError so it fires once per real
-    // selection rather than re-triggering on every recomposition or retry-looping on failure.
+    // cache doesn't survive that). Compares against loadedTournamentId (an identity check on
+    // what's actually loaded) rather than "is eventDivisions empty" — settings can briefly lag
+    // behind a rapid tournament switch, and a plain emptiness check can't tell a load that hasn't
+    // started yet from one that already finished for the wrong (stale) tournament; an identity
+    // mismatch keeps re-triggering until the loaded data genuinely matches the current selection.
+    // liveError still guards against retry-looping on a real, persistent failure.
     val tournamentId = settings.selectedTournamentId
-    LaunchedEffect(tournamentId, eventDivisions, liveLoading, liveError) {
-        if (tournamentId != null && eventDivisions.isEmpty() && !liveLoading && liveError == null) {
+    LaunchedEffect(tournamentId, loadedTournamentId, liveLoading, liveError) {
+        if (tournamentId != null && tournamentId != loadedTournamentId && !liveLoading && liveError == null) {
             ServiceLocator.liveRosterRepository.loadAllDivisions(tournamentId)
         }
     }

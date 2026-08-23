@@ -59,6 +59,7 @@ import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.PrimaryButton
+import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.ScoreChip
 import com.undy.tdaid.ui.components.SectionLabel
@@ -319,6 +320,9 @@ private fun BioSheetContent(player: Player) {
         Spacer(Modifier.height(10.dp))
         if (player.round1 != null && player.overall != null) {
             RoundStatRow(round1 = player.round1, overall = player.overall)
+            Spacer(Modifier.height(10.dp))
+        } else if (player.overall != null) {
+            OverallStatRow(player.overall)
             Spacer(Modifier.height(10.dp))
         }
         AdgLine(player.adg)

@@ -54,6 +54,7 @@ import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.AdgLiveState
 import com.undy.tdaid.ui.PdgaLiveState
 import com.undy.tdaid.ui.components.PillTag
+import com.undy.tdaid.ui.components.PlayerAvatar
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.rememberViewModel
@@ -214,12 +215,13 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        Modifier.size(44.dp).clip(RoundedCornerShape(50)).background(ForestTint),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(player.initials, color = ForestDark, style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.sp))
-                    }
+                    PlayerAvatar(
+                        player = player,
+                        size = 44.dp,
+                        backgroundColor = ForestTint,
+                        contentColor = ForestDark,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(fontSize = 14.sp),
+                    )
                     Spacer(Modifier.width(11.dp))
                     Column(Modifier.weight(1f)) {
                         Text(player.name, style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp), color = Ink)

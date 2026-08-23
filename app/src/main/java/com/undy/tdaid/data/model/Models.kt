@@ -40,6 +40,9 @@ data class Player(
     val round1: RoundResult? = null,
     val overall: TournamentStanding? = null,
     val adg: AdgRanking? = null,
+    /** A real headshot published on PDGA Live — null for demo players and any real player PDGA
+     *  doesn't have a photo on file for. */
+    val avatarUrl: String? = null,
 ) {
     val initials: String
         get() = name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase()

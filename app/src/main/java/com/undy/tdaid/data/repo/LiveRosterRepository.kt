@@ -221,6 +221,7 @@ class RealLiveRosterRepository(
                                 bio = describePlayer(homeLocation = homeLocation)
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r.pdgaNumber] ?: "—") },
+                                avatarUrl = r.avatarUrl,
                             )
                         },
                     )

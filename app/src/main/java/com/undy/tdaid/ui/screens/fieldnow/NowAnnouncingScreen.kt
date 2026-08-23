@@ -61,6 +61,7 @@ import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.OverallStatRow
+import com.undy.tdaid.ui.components.PlayerAvatar
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.ScoreChip
 import com.undy.tdaid.ui.components.SectionLabel
@@ -292,12 +293,13 @@ private fun OnDeckRow(group: TeeGroup, countdown: String, urgent: Boolean, onPla
 private fun BioSheetContent(player: Player) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 19.dp, vertical = 6.dp).padding(bottom = 22.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            Box(
-                Modifier.size(46.dp).clip(RoundedCornerShape(50)).background(Forest),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(player.initials, color = Cream, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 15.sp))
-            }
+            PlayerAvatar(
+                player = player,
+                size = 46.dp,
+                backgroundColor = Forest,
+                contentColor = Cream,
+                textStyle = MaterialTheme.typography.headlineSmall.copy(fontSize = 15.sp),
+            )
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(player.name, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.5.sp), color = Ink)

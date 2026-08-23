@@ -11,7 +11,8 @@ import java.io.IOException
 import java.net.URLEncoder
 
 private const val BASE_URL = "https://api.pdga.com"
-private const val LIVE_BASE_URL = "https://www.pdga.com/apps/tournament/live-api"
+private const val SITE_ROOT = "https://www.pdga.com"
+private const val LIVE_BASE_URL = "$SITE_ROOT/apps/tournament/live-api"
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 
 data class PdgaSession(
@@ -55,6 +56,8 @@ data class PdgaLiveResult(
     val city: String?,
     val country: String?,
     val toPar: Int?,
+    /** Absolute URL to the player's real PDGA Live headshot, if PDGA has one on file. */
+    val avatarUrl: String?,
 )
 
 /** One real division running at a tournament, as published by PDGA Live. */
@@ -211,6 +214,9 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                         city = s.optString("City").trim().ifEmpty { null },
                         country = s.optString("Country").trim().ifEmpty { null },
                         toPar = if (s.has("ToPar") && !s.isNull("ToPar")) s.optInt("ToPar") else null,
+                        avatarUrl = s.optString("AvatarURL").trim().ifEmpty { null }?.let { path ->
+                            if (path.startsWith("http")) path else "$SITE_ROOT$path"
+                        },
                     )
                 }
             }

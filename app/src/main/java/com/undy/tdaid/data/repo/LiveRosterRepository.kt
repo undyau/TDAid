@@ -1,12 +1,17 @@
 package com.undy.tdaid.data.repo
 
+import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
+import com.undy.tdaid.data.remote.PdgaPlayerProfile
+import com.undy.tdaid.data.remote.PdgaProfileScraper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,10 +26,18 @@ data class LiveRoster(
     val groups: List<TeeGroup>,
 )
 
+/** Seconds between real per-player profile requests during background prefetch — matches
+ *  pdga.com's robots.txt `Crawl-delay: 10`, since that prefetch is automated, bulk fetching
+ *  rather than a single human-initiated lookup. */
+private const val PROFILE_PREFETCH_DELAY_MS = 10_000L
+
 /**
  * Caches the real roster(s) loaded from PDGA Live's unauthenticated endpoints for whichever
- * tournament the TD is running. Demo tournaments never populate this — screens fall back to
- * [TournamentRepository]'s sample data until a real load succeeds here.
+ * tournament the TD is running, and enriches them with each player's rating, member-since date,
+ * recent result and ADG Tour rank — all fetched once when the event loads, not on demand — so
+ * Field Mode has everything it needs already cached before the TD ever goes offline in the field.
+ * Demo tournaments never populate this — screens fall back to [TournamentRepository]'s sample
+ * data until a real load succeeds here.
  *
  * [load] and [loadAllDivisions] run in the repository's own scope rather than the caller's, since
  * the caller (e.g. Tournament Search's ViewModel) is often about to be navigated away from and
@@ -41,6 +54,9 @@ interface LiveRosterRepository {
     /** Human-readable progress for a multi-division load, e.g. "Loading FPO (2/4)…". Null when
      *  not loading or when a single-division [load] is in progress. */
     val loadingStatus: StateFlow<String?>
+    /** Progress for the slow, throttled per-player profile fetch that runs after the roster
+     *  itself is loaded, e.g. "Loading player profiles… (12/137)". Null when not running. */
+    val profilePrefetchStatus: StateFlow<String?>
     val error: StateFlow<String?>
 
     /** Loads one division/round on demand — used for a manual reload, or a round the TD picks
@@ -48,16 +64,22 @@ interface LiveRosterRepository {
     fun load(tournamentId: String, division: String, round: Int)
 
     /** Discovers every real division in the event and loads each one's current round in one
-     *  go — the normal path, run right after a TD picks a real tournament. */
+     *  go — the normal path, run right after a TD picks a real tournament. Once the roster
+     *  itself is in, this also enriches every player with their real ADG Tour rank (one bulk
+     *  request) and then starts a throttled background fetch of each player's real member-since
+     *  date and most recent result, in tee-time order so the soonest groups are ready first. */
     fun loadAllDivisions(tournamentId: String)
 
-    /** Drops everything cached — call when the TD switches to a different tournament (or back to
-     *  the demo one), so a previous event's real data can't leak into the new selection. */
+    /** Drops everything cached and cancels any in-flight prefetch — call when the TD switches to
+     *  a different tournament (or back to the demo one), so a previous event's real data (or a
+     *  still-running background fetch for it) can't leak into the new selection. */
     fun clear()
 }
 
 class RealLiveRosterRepository(
     private val pdgaRepository: PdgaRepository,
+    private val adgRepository: AdgRepository,
+    private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : LiveRosterRepository {
     private val _rosters = MutableStateFlow<Map<String, LiveRoster>>(emptyMap())
@@ -68,8 +90,12 @@ class RealLiveRosterRepository(
     override val loading: StateFlow<Boolean> = _loading.asStateFlow()
     private val _loadingStatus = MutableStateFlow<String?>(null)
     override val loadingStatus: StateFlow<String?> = _loadingStatus.asStateFlow()
+    private val _profilePrefetchStatus = MutableStateFlow<String?>(null)
+    override val profilePrefetchStatus: StateFlow<String?> = _profilePrefetchStatus.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     override val error: StateFlow<String?> = _error.asStateFlow()
+
+    private var prefetchJob: Job? = null
 
     override fun load(tournamentId: String, division: String, round: Int) {
         scope.launch {
@@ -86,6 +112,7 @@ class RealLiveRosterRepository(
     }
 
     override fun loadAllDivisions(tournamentId: String) {
+        prefetchJob?.cancel()
         scope.launch {
             _loading.value = true
             _error.value = null
@@ -101,17 +128,26 @@ class RealLiveRosterRepository(
                             .onFailure { e -> _error.value = "${division.code}: ${e.message ?: "lookup failed"}" }
                     }
                     _rosters.value = loaded
+                    _loadingStatus.value = null
+                    _loading.value = false
+                    enrichWithAdg()
+                    startProfilePrefetch(loaded)
                 }
-                .onFailure { e -> _error.value = e.message ?: "Couldn't load this event's divisions" }
-            _loadingStatus.value = null
-            _loading.value = false
+                .onFailure { e ->
+                    _error.value = e.message ?: "Couldn't load this event's divisions"
+                    _loadingStatus.value = null
+                    _loading.value = false
+                }
         }
     }
 
     override fun clear() {
+        prefetchJob?.cancel()
+        prefetchJob = null
         _rosters.value = emptyMap()
         _eventDivisions.value = emptyList()
         _error.value = null
+        _profilePrefetchStatus.value = null
     }
 
     private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> =
@@ -132,11 +168,89 @@ class RealLiveRosterRepository(
                                 name = "${r.firstName} ${r.lastName}".trim(),
                                 pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating ?: 0, memberSince = "—"),
                                 recentResult = "—",
-                                bio = "Real PDGA Live starter — use \"Check Live PDGA/ADG Data\" for a full profile.",
+                                bio = "Real PDGA Live starter — full profile loading in the background.",
                             )
                         },
                     )
                 }
             LiveRoster(tournamentId, division, round, groups)
         }
+
+    /** One request for the whole ADG Tour leaderboard, matched to real starters by name — cheap
+     *  enough to just do in bulk, unlike the PDGA per-player profile fetch below. */
+    private fun enrichWithAdg() {
+        scope.launch {
+            adgRepository.fetchLeaderboard().onSuccess { rows ->
+                if (rows.isEmpty()) return@onSuccess
+                _rosters.update { current ->
+                    current.mapValues { (_, roster) ->
+                        roster.copy(
+                            groups = roster.groups.map { group ->
+                                group.copy(
+                                    players = group.players.map { p ->
+                                        val match = rows.firstOrNull { it.name.equals(p.name, ignoreCase = true) }
+                                        if (match == null) p else p.copy(adg = AdgRanking(match.rank, match.division, match.points))
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /** Fetches each real starter's public PDGA profile page for their member-since date and most
+     *  recent result — one HTTP request per player, so this is paced at [PROFILE_PREFETCH_DELAY_MS]
+     *  apart (pdga.com's own stated Crawl-delay) rather than fired all at once. Works through
+     *  players in tee-time order across every division, soonest groups first, so a group's data
+     *  is ready well before it's actually announced. */
+    private fun startProfilePrefetch(loaded: Map<String, LiveRoster>) {
+        prefetchJob = scope.launch {
+            data class Target(val teeTime: String, val division: String, val player: Player)
+
+            val queue = loaded.entries
+                .flatMap { (division, roster) -> roster.groups.flatMap { g -> g.players.map { Target(g.time, division, it) } } }
+                .sortedWith(compareBy({ it.teeTime.isEmpty() }, { it.teeTime }))
+            if (queue.isEmpty()) return@launch
+
+            queue.forEachIndexed { index, target ->
+                _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${queue.size})"
+                runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber, target.division) }
+                    .onSuccess { profile -> mergeProfile(target.division, target.player.id, profile) }
+                if (index < queue.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
+            }
+            _profilePrefetchStatus.value = null
+        }
+    }
+
+    private fun mergeProfile(division: String, playerId: String, profile: PdgaPlayerProfile) {
+        _rosters.update { current ->
+            val roster = current[division] ?: return@update current
+            val updatedGroups = roster.groups.map { group ->
+                group.copy(
+                    players = group.players.map { p ->
+                        if (p.id != playerId) {
+                            p
+                        } else {
+                            p.copy(
+                                pdga = p.pdga.copy(memberSince = profile.memberSince ?: p.pdga.memberSince),
+                                recentResult = profile.recentResult ?: p.recentResult,
+                                bio = describePlayer(profile.memberSince, profile.recentResult) ?: p.bio,
+                            )
+                        }
+                    },
+                )
+            }
+            current + (division to roster.copy(groups = updatedGroups))
+        }
+    }
+
+    private fun describePlayer(memberSince: String?, recentResult: String?): String? {
+        val facts = listOfNotNull(
+            memberSince?.let { "PDGA member since $it" },
+            recentResult?.let { "most recent result: $it" },
+        )
+        return facts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.plus(".")
+    }
 }

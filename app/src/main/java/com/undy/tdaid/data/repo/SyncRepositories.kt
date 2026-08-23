@@ -89,6 +89,9 @@ class RealPdgaRepository(
  */
 interface AdgRepository {
     suspend fun lookupPlayerByName(name: String): Result<AdgLeaderboardRow?>
+    /** The whole leaderboard in one request — used to enrich a real roster in bulk instead of
+     *  looking up every player one at a time. */
+    suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>>
     suspend fun syncNow(): Long
 }
 
@@ -97,6 +100,8 @@ class RealAdgRepository(private val scraper: AdgScraper = AdgScraper()) : AdgRep
         val rows = scraper.fetchLeaderboard()
         rows.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
+
+    override suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>> = runCatching { scraper.fetchLeaderboard() }
 
     override suspend fun syncNow(): Long = System.currentTimeMillis()
 }

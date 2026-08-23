@@ -38,7 +38,7 @@ object ServiceLocator {
         kotlinx.coroutines.runBlocking { realPdgaRepository.restoreSession() }
         pdgaRepository = realPdgaRepository
         adgRepository = RealAdgRepository()
-        liveRosterRepository = RealLiveRosterRepository(pdgaRepository)
+        liveRosterRepository = RealLiveRosterRepository(pdgaRepository, adgRepository)
         bioNotesRepository = RoomBioNotesRepository(AppDatabase.get(context).bioNoteDao())
     }
 }

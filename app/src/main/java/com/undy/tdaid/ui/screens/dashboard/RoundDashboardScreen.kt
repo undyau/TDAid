@@ -79,6 +79,7 @@ class DashboardViewModel(
     val eventDivisions = liveRosterRepository.eventDivisions
     val liveLoading = liveRosterRepository.loading
     val liveLoadingStatus = liveRosterRepository.loadingStatus
+    val profilePrefetchStatus = liveRosterRepository.profilePrefetchStatus
     val liveError = liveRosterRepository.error
 
     /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
@@ -126,6 +127,7 @@ fun RoundDashboardScreen(
     val eventDivisions by vm.eventDivisions.collectAsState()
     val liveLoading by vm.liveLoading.collectAsState()
     val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
+    val profilePrefetchStatus by vm.profilePrefetchStatus.collectAsState()
     val liveError by vm.liveError.collectAsState()
     val divisions = vm.divisionsFor(eventDivisions)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -199,6 +201,7 @@ fun RoundDashboardScreen(
                             Text(
                                 when {
                                     liveLoadingStatus != null -> "Real PDGA event · $liveLoadingStatus"
+                                    profilePrefetchStatus != null -> "Real PDGA event · $profilePrefetchStatus"
                                     eventDivisions.isNotEmpty() -> "Real PDGA event · real divisions, starters & tee times loaded"
                                     liveError != null -> "Real PDGA event · $liveError"
                                     else -> "Real PDGA event · loading real divisions…"

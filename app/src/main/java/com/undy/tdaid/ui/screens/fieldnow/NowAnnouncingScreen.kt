@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CalendarViewDay
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -87,7 +88,7 @@ import kotlinx.coroutines.flow.stateIn
  *  needs to be one combined timeline rather than scoped to a single division. */
 class NowAnnouncingViewModel(
     tournamentRepository: TournamentRepository,
-    liveRosterRepository: LiveRosterRepository,
+    private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
     val rosters = liveRosterRepository.rosters
@@ -120,6 +121,13 @@ class NowAnnouncingViewModel(
 
     fun roundLabel(rosters: Map<String, LiveRoster>): String =
         rosters.values.firstOrNull()?.let { "RD ${it.round} · Live" } ?: "RD 2"
+
+    /** Lets a TD pick up a newly-started round (or any other change on PDGA's end) without
+     *  backing out to Setup Mode first — re-fetches every division fresh, same as Dashboard's
+     *  own refresh, since Field Mode has no other way to trigger a reload. */
+    fun refreshSync(tournamentId: String?) {
+        if (tournamentId != null) liveRosterRepository.loadAllDivisions(tournamentId)
+    }
 
     var currentIndex by mutableStateOf(0)
         private set
@@ -181,6 +189,9 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             }
             Spacer(Modifier.width(8.dp))
             Text(vm.roundLabel(rosters), style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
+            IconButton(onClick = { vm.refreshSync(settings.selectedTournamentId) }) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Refresh from PDGA", tint = ForestDark, modifier = Modifier.size(19.dp))
+            }
             IconButton(onClick = onOpenAlert) {
                 Icon(Icons.Filled.Notifications, contentDescription = "Tee-time alert", tint = ForestDark, modifier = Modifier.size(19.dp))
             }

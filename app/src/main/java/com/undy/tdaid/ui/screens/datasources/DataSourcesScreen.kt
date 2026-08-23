@@ -141,7 +141,6 @@ class DataSourcesViewModel(
                 .onSuccess {
                     pdgaLoggedIn = true
                     pdgaUsername = pdgaRepository.loggedInAs
-                    settingsRepository.setPdgaConnected(true)
                 }
                 .onFailure { e -> pdgaLoginError = e.message ?: "Login failed" }
             pdgaLoginInProgress = false
@@ -149,12 +148,11 @@ class DataSourcesViewModel(
     }
 
     fun logoutPdga() {
-        pdgaRepository.logout()
         pdgaLoggedIn = false
         pdgaUsername = null
         pdgaLookupResult = null
         pdgaLookupError = null
-        viewModelScope.launch { settingsRepository.setPdgaConnected(false) }
+        viewModelScope.launch { pdgaRepository.logout() }
     }
 
     fun lookupPdgaPlayer(pdgaNumber: String) {

@@ -14,7 +14,12 @@ private val Context.dataStore by preferencesDataStore(name = "td_settings")
 
 data class AppSettings(
     val announceIntervalMin: Int = 3,
-    val pdgaConnected: Boolean = true,
+    /** A previously saved PDGA login session — lets the TD skip re-entering credentials on every
+     *  app restart. Null means logged out. If the saved cookie has since expired, the next real
+     *  PDGA API call just fails and the login form reappears, same as any expired web session. */
+    val pdgaSessionCookieName: String? = null,
+    val pdgaSessionCookieValue: String? = null,
+    val pdgaUsername: String? = null,
     val syncRatings: Boolean = true,
     val syncResults: Boolean = true,
     val syncMembership: Boolean = true,
@@ -36,7 +41,9 @@ data class AppSettings(
 
 private object Keys {
     val ANNOUNCE_INTERVAL = intPreferencesKey("announce_interval_min")
-    val PDGA_CONNECTED = booleanPreferencesKey("pdga_connected")
+    val PDGA_SESSION_COOKIE_NAME = stringPreferencesKey("pdga_session_cookie_name")
+    val PDGA_SESSION_COOKIE_VALUE = stringPreferencesKey("pdga_session_cookie_value")
+    val PDGA_USERNAME = stringPreferencesKey("pdga_username")
     val SYNC_RATINGS = booleanPreferencesKey("sync_ratings")
     val SYNC_RESULTS = booleanPreferencesKey("sync_results")
     val SYNC_MEMBERSHIP = booleanPreferencesKey("sync_membership")
@@ -54,7 +61,8 @@ private object Keys {
 interface SettingsRepository {
     val settings: Flow<AppSettings>
     suspend fun setAnnounceInterval(minutes: Int)
-    suspend fun setPdgaConnected(connected: Boolean)
+    suspend fun savePdgaSession(cookieName: String, cookieValue: String, username: String)
+    suspend fun clearPdgaSession()
     suspend fun setSyncToggle(ratings: Boolean? = null, results: Boolean? = null, membership: Boolean? = null, bios: Boolean? = null)
     suspend fun setSyncFrequency(minutes: Int)
     suspend fun setAdgConnected(connected: Boolean)
@@ -69,7 +77,9 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
     override val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             announceIntervalMin = prefs[Keys.ANNOUNCE_INTERVAL] ?: 3,
-            pdgaConnected = prefs[Keys.PDGA_CONNECTED] ?: true,
+            pdgaSessionCookieName = prefs[Keys.PDGA_SESSION_COOKIE_NAME],
+            pdgaSessionCookieValue = prefs[Keys.PDGA_SESSION_COOKIE_VALUE],
+            pdgaUsername = prefs[Keys.PDGA_USERNAME],
             syncRatings = prefs[Keys.SYNC_RATINGS] ?: true,
             syncResults = prefs[Keys.SYNC_RESULTS] ?: true,
             syncMembership = prefs[Keys.SYNC_MEMBERSHIP] ?: true,
@@ -89,8 +99,20 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.dataStore.edit { it[Keys.ANNOUNCE_INTERVAL] = minutes.coerceIn(1, 10) }
     }
 
-    override suspend fun setPdgaConnected(connected: Boolean) {
-        context.dataStore.edit { it[Keys.PDGA_CONNECTED] = connected }
+    override suspend fun savePdgaSession(cookieName: String, cookieValue: String, username: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.PDGA_SESSION_COOKIE_NAME] = cookieName
+            prefs[Keys.PDGA_SESSION_COOKIE_VALUE] = cookieValue
+            prefs[Keys.PDGA_USERNAME] = username
+        }
+    }
+
+    override suspend fun clearPdgaSession() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(Keys.PDGA_SESSION_COOKIE_NAME)
+            prefs.remove(Keys.PDGA_SESSION_COOKIE_VALUE)
+            prefs.remove(Keys.PDGA_USERNAME)
+        }
     }
 
     override suspend fun setSyncToggle(ratings: Boolean?, results: Boolean?, membership: Boolean?, bios: Boolean?) {

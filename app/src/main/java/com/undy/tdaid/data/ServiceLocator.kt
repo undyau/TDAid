@@ -30,10 +30,15 @@ object ServiceLocator {
     fun init(context: Context) {
         if (::tournamentRepository.isInitialized) return
         tournamentRepository = FakeTournamentRepository()
-        pdgaRepository = RealPdgaRepository()
+        settingsRepository = DataStoreSettingsRepository(context.applicationContext)
+        val realPdgaRepository = RealPdgaRepository(settingsRepository = settingsRepository)
+        // A tiny local DataStore read, done once at cold start — restoring a saved session here
+        // (rather than asynchronously later) guarantees isLoggedIn is already correct by the time
+        // the first screen reads it, so no screen needs its own loading state for this.
+        kotlinx.coroutines.runBlocking { realPdgaRepository.restoreSession() }
+        pdgaRepository = realPdgaRepository
         adgRepository = RealAdgRepository()
         liveRosterRepository = RealLiveRosterRepository(pdgaRepository)
-        settingsRepository = DataStoreSettingsRepository(context.applicationContext)
         bioNotesRepository = RoomBioNotesRepository(AppDatabase.get(context).bioNoteDao())
     }
 }

@@ -1,5 +1,6 @@
 package com.undy.tdaid.data.repo
 
+import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
@@ -7,6 +8,7 @@ import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.remote.PdgaSession
+import kotlinx.coroutines.flow.first
 
 /**
  * Connects to the real, official PDGA REST API (api.pdga.com). Unlike an app-level API key,
@@ -17,7 +19,7 @@ interface PdgaRepository {
     val isLoggedIn: Boolean
     val loggedInAs: String?
     suspend fun login(username: String, password: String): Result<Unit>
-    fun logout()
+    suspend fun logout()
     suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?>
     suspend fun searchEvents(query: String): Result<List<PdgaEventResult>>
     /** Real per-round tee times/pairings — unlike everything else here, this endpoint needs
@@ -26,18 +28,36 @@ interface PdgaRepository {
     suspend fun syncNow(): Long
 }
 
-class RealPdgaRepository(private val client: PdgaApiClient = PdgaApiClient()) : PdgaRepository {
+class RealPdgaRepository(
+    private val client: PdgaApiClient = PdgaApiClient(),
+    private val settingsRepository: SettingsRepository,
+) : PdgaRepository {
     private var session: PdgaSession? = null
 
     override val isLoggedIn: Boolean get() = session != null
     override val loggedInAs: String? get() = session?.username
 
-    override suspend fun login(username: String, password: String): Result<Unit> = runCatching {
-        session = client.login(username, password)
+    /** Restores a session saved from a previous run, called once at app startup before any
+     *  screen reads [isLoggedIn] — so a TD isn't forced to log back in to PDGA on every launch. */
+    suspend fun restoreSession() {
+        val settings = settingsRepository.settings.first()
+        val cookieName = settings.pdgaSessionCookieName
+        val cookieValue = settings.pdgaSessionCookieValue
+        val username = settings.pdgaUsername
+        if (cookieName != null && cookieValue != null && username != null) {
+            session = PdgaSession(cookieName, cookieValue, username)
+        }
     }
 
-    override fun logout() {
+    override suspend fun login(username: String, password: String): Result<Unit> = runCatching {
+        val newSession = client.login(username, password)
+        session = newSession
+        settingsRepository.savePdgaSession(newSession.cookieName, newSession.cookieValue, newSession.username)
+    }
+
+    override suspend fun logout() {
         session = null
+        settingsRepository.clearPdgaSession()
     }
 
     override suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?> = runCatching {

@@ -343,9 +343,9 @@ private fun PlayerRow(
 }
 
 /** Explicit, per-player button that hits the real PDGA API (if logged in) and the real ADG
- *  Tour leaderboard, showing genuine live results rather than this row's cached demo data.
- *  A PDGA name mismatch is surfaced rather than silently swapped in, since this roster's PDGA
- *  numbers are demo placeholders, not necessarily the real player's actual assigned number. */
+ *  Tour leaderboard, showing genuine live results rather than this row's cached data.
+ *  A PDGA name mismatch is surfaced rather than silently trusted, since a demo player's PDGA
+ *  number is a placeholder, not necessarily their real assigned number. */
 @Composable
 private fun LiveDataCheck(
     player: Player,

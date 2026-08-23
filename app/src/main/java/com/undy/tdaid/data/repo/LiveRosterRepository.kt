@@ -211,6 +211,7 @@ class RealLiveRosterRepository(
                 .map { (teeTime, players) ->
                     TeeGroup(
                         time = teeTime.ifEmpty { "TBD" },
+                        division = division,
                         players = players.map { r ->
                             val homeLocation = listOfNotNull(r.city, r.country).joinToString(", ").ifEmpty { null }
                             Player(
@@ -222,6 +223,7 @@ class RealLiveRosterRepository(
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r.pdgaNumber] ?: "—") },
                                 avatarUrl = r.avatarUrl,
+                                division = division,
                             )
                         },
                     )

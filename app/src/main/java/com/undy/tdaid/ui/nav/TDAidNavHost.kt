@@ -19,14 +19,13 @@ private object Routes {
     const val ROSTER = "roster/{division}"
     const val BIO_EDITOR = "bioEditor/{playerId}"
     const val DATA_SOURCES = "dataSources"
-    const val FIELD_NOW = "fieldNow/{division}"
+    const val FIELD_NOW = "fieldNow"
     const val TEE_ALERT = "teeAlert"
     const val SCHEDULE = "schedule"
     const val TOURNAMENT_SEARCH = "tournamentSearch"
 
     fun roster(division: String) = "roster/$division"
     fun bioEditor(playerId: String) = "bioEditor/$playerId"
-    fun fieldNow(division: String) = "fieldNow/$division"
 }
 
 @Composable
@@ -36,7 +35,7 @@ fun TDAidNavHost() {
     NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
         composable(Routes.DASHBOARD) {
             RoundDashboardScreen(
-                onEnterFieldMode = { division -> navController.navigate(Routes.fieldNow(division)) },
+                onEnterFieldMode = { navController.navigate(Routes.FIELD_NOW) },
                 onOpenDataSources = { navController.navigate(Routes.DATA_SOURCES) },
                 onOpenRoster = { division -> navController.navigate(Routes.roster(division)) },
                 onSelectTournament = { navController.navigate(Routes.TOURNAMENT_SEARCH) },
@@ -57,10 +56,8 @@ fun TDAidNavHost() {
         composable(Routes.DATA_SOURCES) {
             DataSourcesScreen(onBack = { navController.popBackStack() })
         }
-        composable(Routes.FIELD_NOW) { backStackEntry ->
-            val division = backStackEntry.arguments?.getString("division") ?: "MPO"
+        composable(Routes.FIELD_NOW) {
             NowAnnouncingScreen(
-                divisionCode = division,
                 onOpenSchedule = { navController.navigate(Routes.SCHEDULE) },
                 onOpenAlert = { navController.navigate(Routes.TEE_ALERT) },
             )

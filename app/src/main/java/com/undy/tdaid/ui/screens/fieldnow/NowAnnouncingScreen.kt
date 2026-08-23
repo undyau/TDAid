@@ -81,11 +81,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** Shares whichever roster Roster last loaded for this division (real, once a TD loads it there
- *  — else the demo sample), so Setup's roster view and Field Mode's live announce queue always
- *  agree, exactly like the original demo-only design did. */
+/** Shares whichever real rosters have loaded (or the demo sample, until one has), merged into a
+ *  single tee-time-ordered queue across every division — a TD announces over one PA, and
+ *  divisions commonly tee off in the same window or interleaved times, so the announce queue
+ *  needs to be one combined timeline rather than scoped to a single division. */
 class NowAnnouncingViewModel(
-    private val divisionCode: String,
     tournamentRepository: TournamentRepository,
     liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
@@ -93,11 +93,33 @@ class NowAnnouncingViewModel(
     val rosters = liveRosterRepository.rosters
     val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
     val groups = rosters
-        .map { byDivision -> byDivision[divisionCode]?.groups ?: demoGroups }
+        .map { byDivision -> mergedGroups(byDivision) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
 
+    /** Re-buckets every division's players by tee time from scratch, rather than just
+     *  interleaving each division's already-built groups — a single physical card can carry
+     *  players from more than one division (a shared tee time), and those need to surface as one
+     *  group to announce, not fragment into a separate announcement per division. A group's
+     *  [TeeGroup.division] is left blank when its players aren't all the same division, so the UI
+     *  knows to fall back to per-player division tags instead of one group-level badge. */
+    private fun mergedGroups(byDivision: Map<String, LiveRoster>): List<TeeGroup> {
+        if (byDivision.isEmpty()) return demoGroups
+        return byDivision.values
+            .flatMap { roster -> roster.groups.flatMap { group -> group.players.map { group.time to it } } }
+            .groupBy({ it.first }, { it.second })
+            .map { (time, players) ->
+                TeeGroup(time = time, players = players, division = players.map { it.division }.distinct().singleOrNull() ?: "")
+            }
+            .sortedWith(
+                compareBy(
+                    { TeeAlarmScheduler.parseTodayMillis(it.time) == null },
+                    { TeeAlarmScheduler.parseTodayMillis(it.time) ?: Long.MAX_VALUE },
+                ),
+            )
+    }
+
     fun roundLabel(rosters: Map<String, LiveRoster>): String =
-        rosters[divisionCode]?.let { "RD ${it.round} · Live" } ?: "RD 2"
+        rosters.values.firstOrNull()?.let { "RD ${it.round} · Live" } ?: "RD 2"
 
     var currentIndex by mutableStateOf(0)
         private set
@@ -118,9 +140,9 @@ private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
+fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     val vm = rememberViewModel {
-        NowAnnouncingViewModel(divisionCode, ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository)
+        NowAnnouncingViewModel(ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository)
     }
     val context = LocalContext.current
     val groups by vm.groups.collectAsState()
@@ -158,7 +180,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Text("$divisionCode · ${vm.roundLabel(rosters)}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
+            Text(vm.roundLabel(rosters), style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenAlert) {
                 Icon(Icons.Filled.Notifications, contentDescription = "Tee-time alert", tint = ForestDark, modifier = Modifier.size(19.dp))
             }
@@ -176,10 +198,20 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
             if (current != null) {
                 item {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Forest).padding(19.dp)) {
-                        Text("NOW ANNOUNCING", color = Accent, style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("NOW ANNOUNCING", color = Accent, style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp), modifier = Modifier.weight(1f))
+                            if (current.division.isNotEmpty()) {
+                                Text(
+                                    current.division,
+                                    color = Cream,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+                                    modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(Cream.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                                )
+                            }
+                        }
                         Text(current.time, color = Cream, style = MaterialTheme.typography.headlineLarge)
                         Text(
-                            if (vm.done(groups)) "Final card of the division" else "Announcing now · ${settings.announceIntervalMin} min before start",
+                            if (vm.done(groups)) "Final card of the day" else "Announcing now · ${settings.announceIntervalMin} min before start",
                             color = Cream.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             modifier = Modifier.padding(top = 2.dp, bottom = 13.dp),
@@ -196,6 +228,15 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(player.name, color = Cream, style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp), modifier = Modifier.weight(1f))
+                                    if (current.division.isEmpty() && player.division.isNotEmpty()) {
+                                        Text(
+                                            player.division,
+                                            color = Cream.copy(alpha = 0.75f),
+                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 9.5.sp),
+                                            modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(Cream.copy(alpha = 0.16f)).padding(horizontal = 7.dp, vertical = 3.dp),
+                                        )
+                                        Spacer(Modifier.width(7.dp))
+                                    }
                                     player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
                                     Spacer(Modifier.width(8.dp))
                                     Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
@@ -209,7 +250,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
             item {
                 if (vm.done(groups)) {
                     Text(
-                        "All groups announced for this division ✓",
+                        "All groups announced ✓",
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.fillMaxWidth(),
@@ -254,6 +295,15 @@ private fun OnDeckRow(group: TeeGroup, countdown: String, urgent: Boolean, onPla
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).background(SurfaceColor).padding(horizontal = 13.dp, vertical = 11.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(group.time, style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.sp), color = Ink)
+            if (group.division.isNotEmpty()) {
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    group.division,
+                    color = ForestDark,
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+                    modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(com.undy.tdaid.ui.theme.ForestTint).padding(horizontal = 7.dp, vertical = 3.dp),
+                )
+            }
             Spacer(Modifier.weight(1f))
             Text(
                 countdown,
@@ -275,6 +325,10 @@ private fun OnDeckRow(group: TeeGroup, countdown: String, urgent: Boolean, onPla
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(player.name, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.5.sp), color = Ink)
+                    if (group.division.isEmpty() && player.division.isNotEmpty()) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(player.division, style = MaterialTheme.typography.labelSmall, color = InkMuted)
+                    }
                     player.overall?.let {
                         Spacer(Modifier.width(4.dp))
                         Text(

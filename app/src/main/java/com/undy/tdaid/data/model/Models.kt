@@ -43,6 +43,10 @@ data class Player(
     /** A real headshot published on PDGA Live — null for demo players and any real player PDGA
      *  doesn't have a photo on file for. */
     val avatarUrl: String? = null,
+    /** Which real division this player is competing in — empty for demo players. A tee group can
+     *  legitimately mix divisions (a shared card teeing off together), so this lives on the
+     *  player rather than only on the group. */
+    val division: String = "",
 ) {
     val initials: String
         get() = name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase()
@@ -51,6 +55,10 @@ data class Player(
 data class TeeGroup(
     val time: String,
     val players: List<Player>,
+    /** Which real division this group belongs to — empty for demo groups, which never need to
+     *  disambiguate since there's only ever one. Lets a merged, cross-division announcing queue
+     *  show which division each group is (divisions commonly tee off in the same window). */
+    val division: String = "",
 )
 
 data class Division(

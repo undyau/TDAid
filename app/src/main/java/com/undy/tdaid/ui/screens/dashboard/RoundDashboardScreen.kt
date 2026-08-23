@@ -125,7 +125,7 @@ class DashboardViewModel(
 
 @Composable
 fun RoundDashboardScreen(
-    onEnterFieldMode: (String) -> Unit,
+    onEnterFieldMode: () -> Unit,
     onOpenDataSources: () -> Unit,
     onOpenRoster: (String) -> Unit,
     onSelectTournament: () -> Unit,
@@ -298,7 +298,7 @@ fun RoundDashboardScreen(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton(text = "Enter Field Mode", onClick = { onEnterFieldMode(vm.selectedDivision) })
+                    PrimaryButton(text = "Enter Field Mode", onClick = onEnterFieldMode)
                     Text(
                         "Downloads tee times, ratings & bios for offline use",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),

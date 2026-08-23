@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +45,10 @@ import androidx.lifecycle.ViewModel
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.RowStatus
 import com.undy.tdaid.data.model.ScheduleRow
+import com.undy.tdaid.data.repo.LiveRoster
+import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.Border
@@ -57,16 +61,56 @@ import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
 
-class FullScheduleViewModel(tournamentRepository: TournamentRepository) : ViewModel() {
-    val rows: List<ScheduleRow> = tournamentRepository.fullSchedule()
-    val divisionFilters: List<String> = listOf("ALL") + rows.map { it.division }.distinct()
+class FullScheduleViewModel(
+    tournamentRepository: TournamentRepository,
+    liveRosterRepository: LiveRosterRepository,
+) : ViewModel() {
+    private val demoRows: List<ScheduleRow> = tournamentRepository.fullSchedule()
+    val rosters = liveRosterRepository.rosters
+
+    /** A real cross-division schedule once every division has loaded — the demo one until then.
+     *  Status is derived from the real tee times against the current time: passed means done,
+     *  the single soonest not-yet-passed group across every division is the one under way now,
+     *  everything else (including any group with no published tee time yet) is upcoming. */
+    fun rowsFor(rosters: Map<String, LiveRoster>): List<ScheduleRow> {
+        if (rosters.isEmpty()) return demoRows
+
+        data class Raw(val time: String, val division: String, val names: String, val millis: Long?)
+        val now = System.currentTimeMillis()
+        val raw = rosters.entries
+            .flatMap { (division, roster) ->
+                roster.groups.map { group ->
+                    Raw(
+                        time = group.time,
+                        division = division,
+                        names = group.players.joinToString(" / ") { it.name },
+                        millis = TeeAlarmScheduler.parseTodayMillis(group.time),
+                    )
+                }
+            }
+            .sortedWith(compareBy({ it.millis == null }, { it.millis ?: Long.MAX_VALUE }))
+        val nextUpcomingIndex = raw.indexOfFirst { it.millis != null && it.millis >= now }
+
+        return raw.mapIndexed { index, r ->
+            val status = when {
+                r.millis == null -> RowStatus.UPCOMING
+                r.millis < now -> RowStatus.DONE
+                index == nextUpcomingIndex -> RowStatus.CURRENT
+                else -> RowStatus.UPCOMING
+            }
+            ScheduleRow(time = r.time, division = r.division, names = r.names, status = status)
+        }
+    }
 }
 
 @Composable
 fun FullScheduleScreen(onBack: () -> Unit) {
-    val vm = rememberViewModel { FullScheduleViewModel(ServiceLocator.tournamentRepository) }
+    val vm = rememberViewModel { FullScheduleViewModel(ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository) }
+    val rosters by vm.rosters.collectAsState()
+    val rows = vm.rowsFor(rosters)
+    val divisionFilters = listOf("ALL") + rows.map { it.division }.distinct()
     var filter by remember { mutableStateOf("ALL") }
-    val filteredRows = vm.rows.filter { filter == "ALL" || it.division == filter }
+    val filteredRows = rows.filter { filter == "ALL" || it.division == filter }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -99,7 +143,7 @@ fun FullScheduleScreen(onBack: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(vm.divisionFilters) { code ->
+            items(divisionFilters) { code ->
                 val active = code == filter
                 Text(
                     code,

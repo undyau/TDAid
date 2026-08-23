@@ -28,13 +28,14 @@ data class AppSettings(
     val adgShowRank: Boolean = true,
     val lastSyncedAtMillis: Long = System.currentTimeMillis() - 2 * 60 * 1000L,
     /** A real event picked via PDGA Event Search, if any — null means the built-in demo
-     *  tournament. Only the name/dates come from PDGA; the roster/schedule stays demo data,
-     *  since PDGA doesn't expose start lists through this API. */
+     *  tournament. */
     val selectedTournamentName: String? = null,
     val selectedTournamentDates: String? = null,
     val selectedTournamentLocation: String? = null,
-    /** The real PDGA tournament_id from Event Search, if a real event is selected — lets other
-     *  real-data tools (like live tee-time lookup) default to it instead of re-typing an ID. */
+    /** The real PDGA tournament_id from Event Search, if a real event is selected — what
+     *  Dashboard watches to auto-load every real division's starters, tee times and live scores
+     *  from PDGA Live (see LiveRosterRepository), and what other real-data tools default to
+     *  instead of making the TD re-type an ID. */
     val selectedTournamentId: String? = null,
 )
 

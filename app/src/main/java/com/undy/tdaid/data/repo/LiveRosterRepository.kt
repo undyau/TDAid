@@ -1,5 +1,7 @@
 package com.undy.tdaid.data.repo
 
+import android.content.Context
+import android.os.PowerManager
 import com.undy.tdaid.data.local.PlayerProfileCacheRepository
 import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
@@ -97,6 +99,7 @@ class RealLiveRosterRepository(
     private val adgRepository: AdgRepository,
     private val profileCacheRepository: PlayerProfileCacheRepository,
     private val settingsRepository: SettingsRepository,
+    private val appContext: Context,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : LiveRosterRepository {
@@ -301,14 +304,27 @@ class RealLiveRosterRepository(
             }
             if (toFetch.isEmpty()) return@launch
 
-            toFetch.forEachIndexed { index, target ->
-                _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${toFetch.size})"
-                runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber, target.division) }
-                    .onSuccess { profile ->
-                        mergeProfile(target.division, target.player.id, profile)
-                        profileCacheRepository.save(tournamentId, target.player.pdga.pdgaNumber, profile)
-                    }
-                if (index < toFetch.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
+            // Doze throttles a background app's CPU/network once the screen is off, which is
+            // exactly when a TD is most likely to have this running — a partial wake lock keeps
+            // this specific loop's requests and delays on schedule. Bounded by an explicit
+            // timeout (Android best practice: never risk an indefinitely-held lock if release()
+            // is somehow skipped) sized generously for the real request pace plus network time.
+            val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TDAid:ProfilePrefetch")
+            val timeoutMillis = toFetch.size * (PROFILE_PREFETCH_DELAY_MS + 20_000L) + 30_000L
+            try {
+                wakeLock?.acquire(timeoutMillis)
+                toFetch.forEachIndexed { index, target ->
+                    _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${toFetch.size})"
+                    runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber, target.division) }
+                        .onSuccess { profile ->
+                            mergeProfile(target.division, target.player.id, profile)
+                            profileCacheRepository.save(tournamentId, target.player.pdga.pdgaNumber, profile)
+                        }
+                    if (index < toFetch.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
+                }
+            } finally {
+                if (wakeLock?.isHeld == true) wakeLock.release()
             }
             _profilePrefetchStatus.value = null
         }

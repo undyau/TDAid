@@ -15,7 +15,12 @@ data class PdgaPlayerProfile(
     val recentResult: String?,
     /** Their most recent 1st-place finish this year, if any. */
     val lastWin: String?,
-    /** Their single best placement this year, if different from the two above. */
+    /** Their most valuable result this year, if different from the two above — ranked by real
+     *  prize money for events that pay cash, or by real PDGA rating points otherwise (most
+     *  amateur and small events), not by raw placement. A lower finish at a bigger, more
+     *  competitive event is often worth more than a "better" placement at a small one — e.g. a
+     *  real player's own results this year: 4th at a small one-round event earned 10 rating
+     *  points, while 14th at a bigger one earned 210. */
     val bestResultThisYear: String?,
 )
 
@@ -44,17 +49,24 @@ class PdgaProfileScraper {
                 memberSince = memberSince,
                 recentResult = results.lastOrNull()?.label,
                 lastWin = results.lastOrNull { it.place == 1 }?.label,
-                bestResultThisYear = results.minByOrNull { it.place }?.label,
+                // Real prize money first (professional, cash events), then real rating points
+                // (everything else, including amateur divisions that never pay cash) — falling
+                // back to placement only to break an exact tie deterministically.
+                bestResultThisYear = results
+                    .maxWithOrNull(compareBy({ it.prizeDollars }, { it.points }, { -it.place }))
+                    ?.label,
             )
         }
 
-    private data class Result(val place: Int, val label: String)
+    private data class Result(val place: Int, val points: Double, val prizeDollars: Int, val label: String)
 
     private fun Element.toResult(): Result? {
         val placeText = selectFirst("td.place")?.text()?.trim() ?: return null
         val place = placeText.toIntOrNull() ?: return null
         val tournament = selectFirst("td.tournament a")?.text()?.trim() ?: return null
-        return Result(place, "${placeText.asPlaceLabel()} · $tournament")
+        val points = selectFirst("td.points")?.text()?.trim()?.toDoubleOrNull() ?: 0.0
+        val prizeDollars = selectFirst("td.prize")?.text()?.trim()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+        return Result(place, points, prizeDollars, "${placeText.asPlaceLabel()} · $tournament")
     }
 
     private fun String.asPlaceLabel(): String {

@@ -48,7 +48,6 @@ import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.repo.LiveRosterRepository
-import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.components.StepperRow
@@ -67,15 +66,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class DashboardViewModel(
-    private val tournamentRepository: TournamentRepository,
     private val settingsRepository: SettingsRepository,
     private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
-    val tournamentName get() = tournamentRepository.tournamentName
-    val roundLabel get() = tournamentRepository.roundLabel
-    val roundDate get() = tournamentRepository.roundDate
-    private val demoDivisions: List<Division> = tournamentRepository.divisions()
-
     val eventDivisions = liveRosterRepository.eventDivisions
     val liveLoading = liveRosterRepository.loading
     val liveLoadingStatus = liveRosterRepository.loadingStatus
@@ -85,15 +78,11 @@ class DashboardViewModel(
     val liveError = liveRosterRepository.error
 
     /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
-     *  has found them for the selected event — the demo list until then. */
+     *  has found them for the selected event — empty until then. */
     fun divisionsFor(eventDivisions: List<PdgaDivisionMeta>): List<Division> =
-        if (eventDivisions.isNotEmpty()) {
-            eventDivisions.map { Division(it.code, it.name, starterCount = it.playerCount, matchedCount = it.playerCount) }
-        } else {
-            demoDivisions
-        }
+        eventDivisions.map { Division(it.code, it.name, starterCount = it.playerCount) }
 
-    var selectedDivision by mutableStateOf(demoDivisions.firstOrNull()?.code ?: "")
+    var selectedDivision by mutableStateOf("")
         private set
 
     val settings = settingsRepository.settings.stateIn(
@@ -110,16 +99,11 @@ class DashboardViewModel(
         settingsRepository.setAnnounceInterval(settings.value.announceIntervalMin - 1)
     }
 
-    /** For a real tournament this actually re-fetches every division from PDGA Live, not just a
-     *  timestamp stamp — the old demo-era version only ever faked a "just synced" label without
-     *  refreshing any real data. */
+    /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
+     *  there's nothing real to sync. */
     fun refreshSync() {
-        val tournamentId = settings.value.selectedTournamentId
-        if (tournamentId != null) {
-            liveRosterRepository.loadAllDivisions(tournamentId)
-        } else {
-            viewModelScope.launch { settingsRepository.markSyncedNow() }
-        }
+        val tournamentId = settings.value.selectedTournamentId ?: return
+        liveRosterRepository.loadAllDivisions(tournamentId)
     }
 }
 
@@ -131,7 +115,7 @@ fun RoundDashboardScreen(
     onSelectTournament: () -> Unit,
 ) {
     val vm = rememberViewModel {
-        DashboardViewModel(ServiceLocator.tournamentRepository, ServiceLocator.settingsRepository, ServiceLocator.liveRosterRepository)
+        DashboardViewModel(ServiceLocator.settingsRepository, ServiceLocator.liveRosterRepository)
     }
     val settings by vm.settings.collectAsState()
     val eventDivisions by vm.eventDivisions.collectAsState()
@@ -193,8 +177,8 @@ fun RoundDashboardScreen(
         ) {
             item {
                 val realTournament = settings.selectedTournamentName != null
-                val displayedName = settings.selectedTournamentName ?: vm.tournamentName
-                val displayedDates = settings.selectedTournamentDates ?: "${vm.roundLabel} · ${vm.roundDate}"
+                val displayedName = settings.selectedTournamentName ?: "No tournament selected"
+                val displayedDates = settings.selectedTournamentDates ?: "Tap to search real PDGA events"
                 Column {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor)
@@ -253,7 +237,7 @@ fun RoundDashboardScreen(
                         if (settings.selectedTournamentId != null) {
                             lastLoadedAtMillis?.let { "Synced with PDGA · ${formatRelative(it, nowTick)}" } ?: "Not synced yet"
                         } else {
-                            "Synced with PDGA · ${formatRelative(settings.lastSyncedAtMillis, nowTick)}"
+                            "Not synced — no tournament selected"
                         },
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.5.sp),
@@ -267,15 +251,22 @@ fun RoundDashboardScreen(
 
             item {
                 Column {
-                    SectionLabel("Divisions — ${vm.roundDate}", modifier = Modifier.padding(bottom = 10.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        divisions.forEach { division ->
-                            DivisionRow(
-                                division = division,
-                                real = eventDivisions.isNotEmpty(),
-                                selected = division.code == vm.selectedDivision,
-                                onClick = { vm.selectDivision(division.code); onOpenRoster(division.code) },
-                            )
+                    SectionLabel("Divisions", modifier = Modifier.padding(bottom = 10.dp))
+                    if (divisions.isEmpty()) {
+                        Text(
+                            "Select a real PDGA tournament above to load its divisions.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                            color = InkMuted,
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            divisions.forEach { division ->
+                                DivisionRow(
+                                    division = division,
+                                    selected = division.code == vm.selectedDivision,
+                                    onClick = { vm.selectDivision(division.code); onOpenRoster(division.code) },
+                                )
+                            }
                         }
                     }
                 }
@@ -313,7 +304,7 @@ fun RoundDashboardScreen(
 }
 
 @Composable
-private fun DivisionRow(division: Division, real: Boolean, selected: Boolean, onClick: () -> Unit) {
+private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -332,7 +323,7 @@ private fun DivisionRow(division: Division, real: Boolean, selected: Boolean, on
         Column(Modifier.weight(1f)) {
             Text(division.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp), color = Ink)
             Text(
-                if (real) "${division.starterCount} real starter${if (division.starterCount == 1) "" else "s"}" else "${division.matchedCount}/${division.starterCount} matched to PDGA",
+                "${division.starterCount} real starter${if (division.starterCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                 color = InkMuted,
             )

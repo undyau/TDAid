@@ -13,6 +13,7 @@ import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
 import com.undy.tdaid.data.remote.PdgaProfileScraper
+import com.undy.tdaid.notify.TeeAlarmScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,6 +34,28 @@ data class LiveRoster(
     val groups: List<TeeGroup>,
 )
 
+/** Re-buckets every loaded division's players by tee time from scratch, rather than just
+ *  interleaving each division's already-built groups — a single physical card can carry players
+ *  from more than one division (a shared tee time), and those need to surface as one group, not
+ *  fragment into a separate one per division. A group's [TeeGroup.division] is left blank when
+ *  its players aren't all the same division, so callers know to fall back to a per-player
+ *  division tag instead of one group-level badge. Shared by every screen that needs one combined,
+ *  tee-time-ordered view across all of a real event's divisions (Field Mode, the tee-time alert
+ *  preview) rather than one division at a time. */
+fun mergeGroupsAcrossDivisions(byDivision: Map<String, LiveRoster>): List<TeeGroup> =
+    byDivision.values
+        .flatMap { roster -> roster.groups.flatMap { group -> group.players.map { group.time to it } } }
+        .groupBy({ it.first }, { it.second })
+        .map { (time, players) ->
+            TeeGroup(time = time, players = players, division = players.map { it.division }.distinct().singleOrNull() ?: "")
+        }
+        .sortedWith(
+            compareBy(
+                { TeeAlarmScheduler.parseTodayMillis(it.time) == null },
+                { TeeAlarmScheduler.parseTodayMillis(it.time) ?: Long.MAX_VALUE },
+            ),
+        )
+
 /** Seconds between real per-player profile requests during background prefetch — matches
  *  pdga.com's robots.txt `Crawl-delay: 10`, since that prefetch is automated, bulk fetching
  *  rather than a single human-initiated lookup. */
@@ -43,8 +66,7 @@ private const val PROFILE_PREFETCH_DELAY_MS = 10_000L
  * tournament the TD is running, and enriches them with each player's rating, member-since date,
  * recent result and ADG Tour rank — all fetched once when the event loads, not on demand — so
  * Field Mode has everything it needs already cached before the TD ever goes offline in the field.
- * Demo tournaments never populate this — screens fall back to [TournamentRepository]'s sample
- * data until a real load succeeds here.
+ * Empty until a real tournament is selected and this finishes its first load.
  *
  * [load] and [loadAllDivisions] run in the repository's own scope rather than the caller's, since
  * the caller (e.g. Tournament Search's ViewModel) is often about to be navigated away from and

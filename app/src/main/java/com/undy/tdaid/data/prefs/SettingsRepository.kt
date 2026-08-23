@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -26,9 +25,7 @@ data class AppSettings(
     val fetchPlayerProfiles: Boolean = true,
     val adgConnected: Boolean = true,
     val adgShowRank: Boolean = true,
-    val lastSyncedAtMillis: Long = System.currentTimeMillis() - 2 * 60 * 1000L,
-    /** A real event picked via PDGA Event Search, if any — null means the built-in demo
-     *  tournament. */
+    /** A real event picked via PDGA Event Search — null until the TD selects one. */
     val selectedTournamentName: String? = null,
     val selectedTournamentDates: String? = null,
     val selectedTournamentLocation: String? = null,
@@ -47,7 +44,6 @@ private object Keys {
     val FETCH_PLAYER_PROFILES = booleanPreferencesKey("fetch_player_profiles")
     val ADG_CONNECTED = booleanPreferencesKey("adg_connected")
     val ADG_SHOW_RANK = booleanPreferencesKey("adg_show_rank")
-    val LAST_SYNCED_AT = longPreferencesKey("last_synced_at")
     val SELECTED_TOURNAMENT_NAME = stringPreferencesKey("selected_tournament_name")
     val SELECTED_TOURNAMENT_DATES = stringPreferencesKey("selected_tournament_dates")
     val SELECTED_TOURNAMENT_LOCATION = stringPreferencesKey("selected_tournament_location")
@@ -62,7 +58,6 @@ interface SettingsRepository {
     suspend fun setFetchPlayerProfiles(enabled: Boolean)
     suspend fun setAdgConnected(connected: Boolean)
     suspend fun setAdgShowRank(show: Boolean)
-    suspend fun markSyncedNow()
     suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?)
     suspend fun clearSelectedTournament()
 }
@@ -78,7 +73,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             fetchPlayerProfiles = prefs[Keys.FETCH_PLAYER_PROFILES] ?: true,
             adgConnected = prefs[Keys.ADG_CONNECTED] ?: true,
             adgShowRank = prefs[Keys.ADG_SHOW_RANK] ?: true,
-            lastSyncedAtMillis = prefs[Keys.LAST_SYNCED_AT] ?: (System.currentTimeMillis() - 2 * 60 * 1000L),
             selectedTournamentName = prefs[Keys.SELECTED_TOURNAMENT_NAME],
             selectedTournamentDates = prefs[Keys.SELECTED_TOURNAMENT_DATES],
             selectedTournamentLocation = prefs[Keys.SELECTED_TOURNAMENT_LOCATION],
@@ -116,10 +110,6 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
 
     override suspend fun setAdgShowRank(show: Boolean) {
         context.dataStore.edit { it[Keys.ADG_SHOW_RANK] = show }
-    }
-
-    override suspend fun markSyncedNow() {
-        context.dataStore.edit { it[Keys.LAST_SYNCED_AT] = System.currentTimeMillis() }
     }
 
     override suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?) {

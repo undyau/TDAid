@@ -57,7 +57,7 @@ import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
-import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.PrimaryButton
@@ -82,45 +82,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** Shares whichever real rosters have loaded (or the demo sample, until one has), merged into a
- *  single tee-time-ordered queue across every division — a TD announces over one PA, and
- *  divisions commonly tee off in the same window or interleaved times, so the announce queue
- *  needs to be one combined timeline rather than scoped to a single division. */
+/** Shares whichever real rosters have loaded, merged into a single tee-time-ordered queue across
+ *  every division — a TD announces over one PA, and divisions commonly tee off in the same
+ *  window or interleaved times, so the announce queue needs to be one combined timeline rather
+ *  than scoped to a single division. Empty until a real tournament is selected and loaded. */
 class NowAnnouncingViewModel(
-    tournamentRepository: TournamentRepository,
     private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
-    private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
     val rosters = liveRosterRepository.rosters
     val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
     val groups = rosters
-        .map { byDivision -> mergedGroups(byDivision) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
-
-    /** Re-buckets every division's players by tee time from scratch, rather than just
-     *  interleaving each division's already-built groups — a single physical card can carry
-     *  players from more than one division (a shared tee time), and those need to surface as one
-     *  group to announce, not fragment into a separate announcement per division. A group's
-     *  [TeeGroup.division] is left blank when its players aren't all the same division, so the UI
-     *  knows to fall back to per-player division tags instead of one group-level badge. */
-    private fun mergedGroups(byDivision: Map<String, LiveRoster>): List<TeeGroup> {
-        if (byDivision.isEmpty()) return demoGroups
-        return byDivision.values
-            .flatMap { roster -> roster.groups.flatMap { group -> group.players.map { group.time to it } } }
-            .groupBy({ it.first }, { it.second })
-            .map { (time, players) ->
-                TeeGroup(time = time, players = players, division = players.map { it.division }.distinct().singleOrNull() ?: "")
-            }
-            .sortedWith(
-                compareBy(
-                    { TeeAlarmScheduler.parseTodayMillis(it.time) == null },
-                    { TeeAlarmScheduler.parseTodayMillis(it.time) ?: Long.MAX_VALUE },
-                ),
-            )
-    }
+        .map { byDivision -> mergeGroupsAcrossDivisions(byDivision) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun roundLabel(rosters: Map<String, LiveRoster>): String =
-        rosters.values.firstOrNull()?.let { "RD ${it.round} · Live" } ?: "RD 2"
+        rosters.values.firstOrNull()?.let { "RD ${it.round} · Live" } ?: "No round loaded"
 
     /** Lets a TD pick up a newly-started round (or any other change on PDGA's end) without
      *  backing out to Setup Mode first — re-fetches every division fresh, same as Dashboard's
@@ -150,7 +126,7 @@ private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min"
 @Composable
 fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     val vm = rememberViewModel {
-        NowAnnouncingViewModel(ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository)
+        NowAnnouncingViewModel(ServiceLocator.liveRosterRepository)
     }
     val context = LocalContext.current
     val groups by vm.groups.collectAsState()
@@ -259,16 +235,22 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             }
 
             item {
-                if (vm.done(groups)) {
-                    Text(
+                when {
+                    groups.isEmpty() -> Text(
+                        "No real tournament loaded yet — select and load one from Setup Mode.",
+                        color = InkMuted,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    vm.done(groups) -> Text(
                         "All groups announced ✓",
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
-                } else {
-                    PrimaryButton(
+                    else -> PrimaryButton(
                         text = "Mark Announced · Next Group",
                         onClick = { vm.advance(groups) },
                         trailing = {
@@ -279,12 +261,14 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                 }
             }
 
-            item {
-                Column {
-                    SectionLabel("On Deck", modifier = Modifier.padding(bottom = 9.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        vm.onDeck(groups).forEachIndexed { index, group ->
-                            OnDeckRow(group = group, countdown = onDeckCountdownLabels.getOrElse(index) { "" }, urgent = index == 0, onPlayerClick = vm::openBio)
+            if (groups.isNotEmpty()) {
+                item {
+                    Column {
+                        SectionLabel("On Deck", modifier = Modifier.padding(bottom = 9.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            vm.onDeck(groups).forEachIndexed { index, group ->
+                                OnDeckRow(group = group, countdown = onDeckCountdownLabels.getOrElse(index) { "" }, urgent = index == 0, onPlayerClick = vm::openBio)
+                            }
                         }
                     }
                 }

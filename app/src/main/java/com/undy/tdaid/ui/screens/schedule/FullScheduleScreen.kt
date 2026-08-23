@@ -53,7 +53,6 @@ import com.undy.tdaid.data.model.ScheduleRow
 import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
-import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.scoreColor
 import com.undy.tdaid.ui.formatRelative
@@ -70,19 +69,18 @@ import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
 
 class FullScheduleViewModel(
-    tournamentRepository: TournamentRepository,
     liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
-    private val demoRows: List<ScheduleRow> = tournamentRepository.fullSchedule()
     val rosters = liveRosterRepository.rosters
     val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
 
-    /** A real cross-division schedule once every division has loaded — the demo one until then.
-     *  Status is derived from the real tee times against the current time: passed means done,
-     *  the single soonest not-yet-passed group across every division is the one under way now,
-     *  everything else (including any group with no published tee time yet) is upcoming. */
+    /** A real cross-division schedule once every division has loaded — empty until a real
+     *  tournament is selected and loaded. Status is derived from the real tee times against the
+     *  current time: passed means done, the single soonest not-yet-passed group across every
+     *  division is the one under way now, everything else (including any group with no
+     *  published tee time yet) is upcoming. */
     fun rowsFor(rosters: Map<String, LiveRoster>): List<ScheduleRow> {
-        if (rosters.isEmpty()) return demoRows
+        if (rosters.isEmpty()) return emptyList()
 
         data class Raw(val time: String, val division: String, val players: List<Player>, val millis: Long?)
         val now = System.currentTimeMillis()
@@ -120,7 +118,7 @@ class FullScheduleViewModel(
 
 @Composable
 fun FullScheduleScreen(onBack: () -> Unit) {
-    val vm = rememberViewModel { FullScheduleViewModel(ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository) }
+    val vm = rememberViewModel { FullScheduleViewModel(ServiceLocator.liveRosterRepository) }
     val rosters by vm.rosters.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     val rows = vm.rowsFor(rosters)
@@ -178,12 +176,21 @@ fun FullScheduleScreen(onBack: () -> Unit) {
             }
         }
 
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(filteredRows) { row -> ScheduleRowItem(row) }
+        if (rows.isEmpty()) {
+            Text(
+                "No schedule loaded yet — select and load a real tournament from Setup Mode.",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                color = InkMuted,
+                modifier = Modifier.padding(16.dp),
+            )
+        } else {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(filteredRows) { row -> ScheduleRowItem(row) }
+            }
         }
     }
 }

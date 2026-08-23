@@ -41,7 +41,6 @@ import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
-import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
@@ -122,13 +121,6 @@ class TournamentSearchViewModel(
         }
     }
 
-    fun useDemoTournament(onDone: () -> Unit) {
-        viewModelScope.launch {
-            settingsRepository.clearSelectedTournament()
-            liveRosterRepository.clear()
-            onDone()
-        }
-    }
 }
 
 @Composable
@@ -201,15 +193,11 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
             }
 
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Spacer(Modifier.width(0.dp))
-                    OutlineButton(text = "Use Demo Tournament (Ridge Valley Open)", onClick = { vm.useDemoTournament(onBack) })
-                    Text(
-                        "Picking a real event loads its real divisions, starters and tee times from PDGA Live automatically — give it a few seconds after returning to the dashboard.",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = InkMuted,
-                    )
-                }
+                Text(
+                    "Picking a real event loads its real divisions, starters and tee times from PDGA Live automatically — give it a few seconds after returning to the dashboard.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = InkMuted,
+                )
             }
         }
     }

@@ -90,15 +90,11 @@ class DataSourcesViewModel(
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
 
-    /** For a real tournament this actually re-fetches every division from PDGA Live, not just a
-     *  timestamp stamp. */
+    /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
+     *  there's nothing real to sync. */
     fun syncNow() {
-        val tournamentId = settings.value.selectedTournamentId
-        if (tournamentId != null) {
-            liveRosterRepository.loadAllDivisions(tournamentId)
-        } else {
-            viewModelScope.launch { settingsRepository.markSyncedNow() }
-        }
+        val tournamentId = settings.value.selectedTournamentId ?: return
+        liveRosterRepository.loadAllDivisions(tournamentId)
     }
 
     fun loginPdga(username: String, password: String) {
@@ -274,7 +270,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                         if (settings.selectedTournamentId != null) {
                             lastLoadedAtMillis?.let { "Last synced ${formatRelative(it, nowTick)}" } ?: "Not synced yet"
                         } else {
-                            "Last synced ${formatRelative(settings.lastSyncedAtMillis, nowTick)}"
+                            "Not synced — no tournament selected"
                         },
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.5.sp),

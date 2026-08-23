@@ -51,7 +51,6 @@ import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
-import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PillTag
@@ -75,11 +74,9 @@ import kotlinx.coroutines.flow.stateIn
 
 class RosterViewModel(
     private val divisionCode: String,
-    tournamentRepository: TournamentRepository,
     private val settingsRepository: SettingsRepository,
     private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
-    private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
     val rosters: StateFlow<Map<String, LiveRoster>> = liveRosterRepository.rosters
     val liveLoading: StateFlow<Boolean> = liveRosterRepository.loading
@@ -91,7 +88,7 @@ class RosterViewModel(
 
     fun changeRound(r: Int) { round = r.coerceIn(1, 20) }
 
-    fun groupsFor(rosters: Map<String, LiveRoster>): List<TeeGroup> = rosters[divisionCode]?.groups ?: demoGroups
+    fun groupsFor(rosters: Map<String, LiveRoster>): List<TeeGroup> = rosters[divisionCode]?.groups ?: emptyList()
 
     /** Manual fallback — normally every division is already loaded automatically right after the
      *  TD picks the tournament, but this lets them retry a division that failed, or reload at a
@@ -107,7 +104,6 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
     val vm = rememberViewModel {
         RosterViewModel(
             divisionCode,
-            ServiceLocator.tournamentRepository,
             ServiceLocator.settingsRepository,
             ServiceLocator.liveRosterRepository,
         )
@@ -136,7 +132,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
             }
             Column {
                 Text(
-                    "$divisionCode · " + (if (isLive) "Round ${activeLiveRoster.round} Starters (Live)" else "Round 2 Starters"),
+                    "$divisionCode · " + (if (isLive) "Round ${activeLiveRoster.round} Starters (Live)" else "Starters"),
                     color = Cream,
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp),
                 )
@@ -149,7 +145,16 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            if (settings.selectedTournamentId != null && !isLive) {
+            if (settings.selectedTournamentId == null) {
+                item {
+                    Text(
+                        "No tournament selected — pick a real PDGA event from Setup Mode first.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                        color = InkMuted,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                    )
+                }
+            } else if (!isLive) {
                 item {
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
@@ -168,7 +173,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                             )
                         } else {
                             Text(
-                                "$divisionCode isn't loaded yet — the demo roster below is shown until then.",
+                                "$divisionCode isn't loaded yet.",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                                 color = InkMuted,
                             )

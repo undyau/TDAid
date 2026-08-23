@@ -48,7 +48,6 @@ import com.undy.tdaid.data.local.BioNote
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.repo.LiveRosterRepository
-import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PlayerAvatar
 import com.undy.tdaid.ui.components.PrimaryButton
@@ -69,13 +68,12 @@ import kotlinx.coroutines.launch
 
 class BioEditorViewModel(
     private val playerId: String,
-    tournamentRepository: TournamentRepository,
     liveRosterRepository: LiveRosterRepository,
     private val bioNotesRepository: BioNotesRepository,
 ) : ViewModel() {
-    // A player might be a demo starter or a real one loaded from PDGA Live for any division
-    // — check all of them, since this screen can be reached from any loaded division.
-    val player: Player? = (tournamentRepository.teeGroups() + liveRosterRepository.rosters.value.values.flatMap { it.groups })
+    // Real players load from whichever division's real roster is cached — check all of them,
+    // since this screen can be reached from any loaded division.
+    val player: Player? = liveRosterRepository.rosters.value.values.flatMap { it.groups }
         .flatMap { it.players }
         .find { it.id == playerId }
 
@@ -123,7 +121,6 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
     val vm = rememberViewModel {
         BioEditorViewModel(
             playerId,
-            ServiceLocator.tournamentRepository,
             ServiceLocator.liveRosterRepository,
             ServiceLocator.bioNotesRepository,
         )

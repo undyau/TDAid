@@ -44,9 +44,6 @@ interface BioNoteDao {
     @Query("SELECT * FROM bio_notes WHERE playerId = :playerId")
     fun observe(playerId: String): Flow<BioNoteEntity?>
 
-    @Query("SELECT COUNT(*) FROM bio_notes")
-    suspend fun count(): Int
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: BioNoteEntity)
 }
@@ -76,7 +73,6 @@ abstract class AppDatabase : RoomDatabase() {
 interface BioNotesRepository {
     fun observeNote(playerId: String): Flow<BioNote?>
     suspend fun saveNote(note: BioNote)
-    suspend fun seedIfEmpty()
 }
 
 class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
@@ -85,24 +81,5 @@ class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
 
     override suspend fun saveNote(note: BioNote) {
         dao.upsert(note.toEntity())
-    }
-
-    override suspend fun seedIfEmpty() {
-        if (dao.count() == 0) {
-            // A note saved during an earlier round, so the app has something real to retrieve
-            // and demonstrate persistence across rounds with, rather than an empty form.
-            dao.upsert(
-                BioNoteEntity(
-                    playerId = "kessler",
-                    pronunciation = "KESS-lur",
-                    hometown = "Cedar Falls, IA",
-                    bio = "Local favorite, three-time club champion. Smooth forehand and clutch " +
-                        "putting under pressure — the gallery loves him on the final few holes.",
-                    savedToLibrary = true,
-                    sourceRoundLabel = "Spring Kickoff, May 2026",
-                    updatedAtMillis = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000,
-                ),
-            )
-        }
     }
 }

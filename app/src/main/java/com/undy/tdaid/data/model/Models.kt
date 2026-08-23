@@ -65,7 +65,6 @@ data class Division(
     val code: String,
     val name: String,
     val starterCount: Int,
-    val matchedCount: Int,
 )
 
 enum class RowStatus { DONE, CURRENT, UPCOMING }

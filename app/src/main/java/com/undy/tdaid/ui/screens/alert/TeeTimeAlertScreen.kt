@@ -46,7 +46,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.model.TeeGroup
-import com.undy.tdaid.data.repo.TournamentRepository
+import com.undy.tdaid.data.repo.LiveRosterRepository
+import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.NotificationHelper
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.rememberViewModel
@@ -62,9 +63,11 @@ private const val TOTAL_SECONDS = 165
 
 class TeeTimeAlertViewModel(
     application: Application,
-    tournamentRepository: TournamentRepository,
+    liveRosterRepository: LiveRosterRepository,
 ) : AndroidViewModel(application) {
-    val groups: List<TeeGroup> = tournamentRepository.teeGroups()
+    // A one-time snapshot of whatever's currently loaded — same as before, just real data instead
+    // of a fixed demo sample. Empty until a real tournament is selected and loaded.
+    val groups: List<TeeGroup> = mergeGroupsAcrossDivisions(liveRosterRepository.rosters.value)
     var groupIndex by mutableIntStateOf(0)
         private set
     var secondsLeft by mutableIntStateOf(TOTAL_SECONDS)
@@ -72,17 +75,19 @@ class TeeTimeAlertViewModel(
     var phase by mutableStateOf(AlertPhase.COUNTING)
         private set
 
-    val currentGroup: TeeGroup get() = groups[groupIndex % groups.size]
+    val currentGroup: TeeGroup? get() = groups.getOrNull(groupIndex % groups.size.coerceAtLeast(1))
 
     init {
-        viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                if (phase == AlertPhase.COUNTING) {
-                    secondsLeft = (secondsLeft - 15).coerceAtLeast(0)
-                    if (secondsLeft <= 0) {
-                        phase = AlertPhase.FIRING
-                        NotificationHelper.notifyAnnounceNow(getApplication(), currentGroup)
+        if (groups.isNotEmpty()) {
+            viewModelScope.launch {
+                while (true) {
+                    delay(1000)
+                    if (phase == AlertPhase.COUNTING) {
+                        secondsLeft = (secondsLeft - 15).coerceAtLeast(0)
+                        if (secondsLeft <= 0) {
+                            phase = AlertPhase.FIRING
+                            currentGroup?.let { NotificationHelper.notifyAnnounceNow(getApplication(), it) }
+                        }
                     }
                 }
             }
@@ -94,6 +99,7 @@ class TeeTimeAlertViewModel(
     }
 
     fun markAnnounced() {
+        if (groups.isEmpty()) return
         phase = AlertPhase.CONFIRMED
         viewModelScope.launch {
             delay(1400)
@@ -108,10 +114,8 @@ class TeeTimeAlertViewModel(
 fun TeeTimeAlertScreen() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val application = context.applicationContext as Application
-    val vm = rememberViewModel { TeeTimeAlertViewModel(application, ServiceLocator.tournamentRepository) }
+    val vm = rememberViewModel { TeeTimeAlertViewModel(application, ServiceLocator.liveRosterRepository) }
     val group = vm.currentGroup
-    val fraction = vm.secondsLeft.toFloat() / TOTAL_SECONDS
-    val firing = vm.phase == AlertPhase.FIRING
 
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
@@ -123,6 +127,33 @@ fun TeeTimeAlertScreen() {
             permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+
+    if (group == null) {
+        Column(
+            Modifier.fillMaxSize().background(Forest).windowInsetsPadding(WindowInsets.systemBars).padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Filled.Notifications, contentDescription = null, tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(28.dp))
+            Text(
+                "No real tournament loaded yet",
+                color = Cream,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp),
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                "Select and load one from Setup Mode to preview a tee-time alert.",
+                color = Cream.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        return
+    }
+
+    val fraction = vm.secondsLeft.toFloat() / TOTAL_SECONDS
+    val firing = vm.phase == AlertPhase.FIRING
 
     Column(
         Modifier.fillMaxSize().background(Forest).windowInsetsPadding(WindowInsets.systemBars),

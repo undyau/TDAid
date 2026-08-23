@@ -53,6 +53,7 @@ import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.PdgaAttribution
+import com.undy.tdaid.ui.PdgaLinkIcon
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.openPdgaUrl
 import com.undy.tdaid.ui.pdgaCoursePath
@@ -195,25 +196,15 @@ fun RoundDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            val tournamentId = settings.selectedTournamentId
-                            Text(
-                                displayedName,
-                                style = if (tournamentId != null) {
-                                    MaterialTheme.typography.titleLarge.copy(textDecoration = TextDecoration.Underline)
-                                } else {
-                                    MaterialTheme.typography.titleLarge
-                                },
-                                modifier = if (tournamentId != null) {
-                                    Modifier.clickable { openPdgaUrl(context, pdgaEventPath(tournamentId)) }
-                                } else {
-                                    Modifier
-                                },
-                            )
+                            Text(displayedName, style = MaterialTheme.typography.titleLarge)
                             Text(
                                 displayedDates + (settings.selectedTournamentLocation?.let { " · $it" } ?: ""),
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                                 color = InkMuted,
                             )
+                        }
+                        settings.selectedTournamentId?.let { tournamentId ->
+                            PdgaLinkIcon(url = pdgaEventPath(tournamentId))
                         }
                         Icon(Icons.Filled.ExpandMore, contentDescription = "Select tournament", tint = InkMuted)
                     }

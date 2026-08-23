@@ -67,6 +67,7 @@ import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.ScoreChip
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.PdgaAttribution
+import com.undy.tdaid.ui.PdgaLinkIcon
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.openPdgaUrl
 import com.undy.tdaid.ui.pdgaPlayerPath
@@ -220,8 +221,8 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                     Text(
                                         player.name,
                                         color = Cream,
-                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp, textDecoration = TextDecoration.Underline),
-                                        modifier = Modifier.weight(1f).clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
+                                        modifier = Modifier.weight(1f),
                                     )
                                     if (current.division.isEmpty() && player.division.isNotEmpty()) {
                                         Text(
@@ -233,6 +234,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                         Spacer(Modifier.width(7.dp))
                                     }
                                     player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
+                                    PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
                                     Spacer(Modifier.width(8.dp))
                                     Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                                 }

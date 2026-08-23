@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -11,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.undy.tdaid.ui.theme.InkMuted
 
@@ -38,4 +44,18 @@ fun PdgaAttribution(modifier: Modifier = Modifier, color: Color = InkMuted) {
         color = color,
         modifier = modifier.clickable { openPdgaUrl(context) },
     )
+}
+
+/** A small, separately-tappable "view on PDGA" affordance — use this instead of nesting a
+ *  clickable directly on a player/event name when that name already sits inside a row with its
+ *  own primary tap action (selecting a row, expanding it, opening a bio). A name-level nested
+ *  clickable consumes taps within its own bounds, which silently breaks the row's primary action
+ *  for anyone who naturally taps the (usually large, prominent) name itself — this icon gives the
+ *  PDGA link its own small, deliberate hit target instead of stealing the name's. */
+@Composable
+fun PdgaLinkIcon(url: String, tint: Color = InkMuted, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    IconButton(onClick = { openPdgaUrl(context, url) }, modifier = modifier.size(28.dp)) {
+        Icon(Icons.Filled.OpenInNew, contentDescription = "View on PDGA", tint = tint, modifier = Modifier.size(15.dp))
+    }
 }

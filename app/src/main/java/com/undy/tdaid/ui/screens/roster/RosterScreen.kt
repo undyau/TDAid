@@ -40,8 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -60,7 +58,7 @@ import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.PdgaAttribution
-import com.undy.tdaid.ui.openPdgaUrl
+import com.undy.tdaid.ui.PdgaLinkIcon
 import com.undy.tdaid.ui.pdgaPlayerPath
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
@@ -250,15 +248,10 @@ private fun PlayerRow(
             }
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
-                val context = LocalContext.current
-                Text(
-                    player.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp, textDecoration = TextDecoration.Underline),
-                    color = Ink,
-                    modifier = Modifier.clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
-                )
+                Text(player.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp), color = Ink)
                 Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = InkMuted)
             }
+            PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber))
             Icon(Icons.Filled.CheckCircle, contentDescription = "Cached", tint = Forest, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))
             Icon(

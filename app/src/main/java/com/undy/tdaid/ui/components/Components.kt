@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,14 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.SubcomposeAsyncImage
 import com.undy.tdaid.data.model.AdgRanking
-import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.RoundResult
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.model.asScoreLabel
@@ -42,38 +37,6 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.ScoreGoodOnDark
 import com.undy.tdaid.ui.theme.SurfaceVariant
-
-/** A player's real PDGA Live headshot when one is published, otherwise the same initials-on-tint
- *  circle used everywhere else — real players without a photo and every demo player fall back to
- *  this identically, so callers never need to branch on it themselves. */
-@Composable
-fun PlayerAvatar(
-    player: Player,
-    size: androidx.compose.ui.unit.Dp,
-    backgroundColor: Color,
-    contentColor: Color,
-    textStyle: TextStyle,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier.size(size).clip(CircleShape).background(backgroundColor),
-        contentAlignment = Alignment.Center,
-    ) {
-        // The initials are always composed, so a missing/loading/failed photo just leaves them
-        // showing through underneath — no separate placeholder needed for those states.
-        Text(player.initials, color = contentColor, style = textStyle)
-        if (player.avatarUrl != null) {
-            SubcomposeAsyncImage(
-                model = player.avatarUrl,
-                contentDescription = player.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                loading = {},
-                error = {},
-            )
-        }
-    }
-}
 
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {

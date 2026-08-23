@@ -6,8 +6,7 @@ data class PdgaProfile(
     /** Null when PDGA hasn't assigned this player a rating yet, e.g. a new or inactive member. */
     val rating: Int?,
     val memberSince: String,
-    /** City/country as reported by PDGA — null for demo players and any real player who hasn't
-     *  listed one. */
+    /** City/country as reported by PDGA — null for any player who hasn't listed one. */
     val homeLocation: String? = null,
 )
 
@@ -40,12 +39,9 @@ data class Player(
     val round1: RoundResult? = null,
     val overall: TournamentStanding? = null,
     val adg: AdgRanking? = null,
-    /** A real headshot published on PDGA Live — null for demo players and any real player PDGA
-     *  doesn't have a photo on file for. */
-    val avatarUrl: String? = null,
-    /** Which real division this player is competing in — empty for demo players. A tee group can
-     *  legitimately mix divisions (a shared card teeing off together), so this lives on the
-     *  player rather than only on the group. */
+    /** Which real division this player is competing in. A tee group can legitimately mix
+     *  divisions (a shared card teeing off together), so this lives on the player rather than
+     *  only on the group. */
     val division: String = "",
 ) {
     val initials: String
@@ -55,9 +51,9 @@ data class Player(
 data class TeeGroup(
     val time: String,
     val players: List<Player>,
-    /** Which real division this group belongs to — empty for demo groups, which never need to
-     *  disambiguate since there's only ever one. Lets a merged, cross-division announcing queue
-     *  show which division each group is (divisions commonly tee off in the same window). */
+    /** Which real division this group belongs to — blank when its players aren't all the same
+     *  division. Lets a merged, cross-division announcing queue show which division each group
+     *  is (divisions commonly tee off in the same window). */
     val division: String = "",
 )
 
@@ -75,7 +71,7 @@ data class ScheduleRow(
     val names: String,
     val status: RowStatus,
     /** The real players in this group, if any — lets the schedule show each player's real live
-     *  score alongside their name instead of just plain text. Empty for the demo schedule. */
+     *  score alongside their name instead of just plain text. */
     val players: List<Player> = emptyList(),
 )
 

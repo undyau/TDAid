@@ -68,9 +68,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.jsoup)
 
-    implementation(libs.coil.compose)
-    implementation(libs.coil.network.okhttp)
-
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

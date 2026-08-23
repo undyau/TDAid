@@ -44,8 +44,6 @@ data class PdgaLiveResult(
     val city: String?,
     val country: String?,
     val toPar: Int?,
-    /** Absolute URL to the player's real PDGA Live headshot, if PDGA has one on file. */
-    val avatarUrl: String?,
 )
 
 /** One real division running at a tournament, as published by PDGA Live. */
@@ -167,9 +165,6 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                         city = s.optString("City").trim().ifEmpty { null },
                         country = s.optString("Country").trim().ifEmpty { null },
                         toPar = if (s.has("ToPar") && !s.isNull("ToPar")) s.optInt("ToPar") else null,
-                        avatarUrl = s.optString("AvatarURL").trim().ifEmpty { null }?.let { path ->
-                            if (path.startsWith("http")) path else "$SITE_ROOT$path"
-                        },
                     )
                 }
             }

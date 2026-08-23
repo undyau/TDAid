@@ -55,7 +55,6 @@ import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.OverallStatRow
-import com.undy.tdaid.ui.components.PlayerAvatar
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.StepperRow
 import com.undy.tdaid.ui.rememberViewModel
@@ -234,13 +233,12 @@ private fun PlayerRow(
             Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 13.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PlayerAvatar(
-                player = player,
-                size = 36.dp,
-                backgroundColor = ForestTint,
-                contentColor = ForestDark,
-                textStyle = MaterialTheme.typography.titleLarge.copy(fontSize = 12.sp),
-            )
+            Box(
+                Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(ForestTint),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(player.initials, color = ForestDark, style = MaterialTheme.typography.titleLarge.copy(fontSize = 12.sp))
+            }
             Spacer(Modifier.width(9.dp))
             Column(Modifier.weight(1f)) {
                 Text(player.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.5.sp), color = Ink)

@@ -47,11 +47,6 @@ import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
-import com.undy.tdaid.data.model.asScoreLabel
-import com.undy.tdaid.data.remote.AdgLeaderboardRow
-import com.undy.tdaid.data.remote.PdgaLiveResult
-import com.undy.tdaid.data.remote.PdgaPlayerResult
-import com.undy.tdaid.data.repo.AdgRepository
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
@@ -62,7 +57,6 @@ import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
-import com.undy.tdaid.ui.theme.AccentTint
 import com.undy.tdaid.ui.theme.Cream
 import com.undy.tdaid.ui.theme.Forest
 import com.undy.tdaid.ui.theme.ForestDark
@@ -78,7 +72,6 @@ import kotlinx.coroutines.launch
 class DataSourcesViewModel(
     private val settingsRepository: SettingsRepository,
     private val pdgaRepository: PdgaRepository,
-    private val adgRepository: AdgRepository,
     private val liveRosterRepository: LiveRosterRepository,
 ) : ViewModel() {
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
@@ -92,36 +85,6 @@ class DataSourcesViewModel(
         private set
     var pdgaLoginError by mutableStateOf<String?>(null)
         private set
-
-    var pdgaLookupInProgress by mutableStateOf(false)
-        private set
-    var pdgaLookupResult by mutableStateOf<PdgaPlayerResult?>(null)
-        private set
-    var pdgaLookupError by mutableStateOf<String?>(null)
-        private set
-
-    var adgLookupInProgress by mutableStateOf(false)
-        private set
-    var adgLookupResult by mutableStateOf<AdgLeaderboardRow?>(null)
-        private set
-    var adgLookupNotFound by mutableStateOf(false)
-        private set
-    var adgLookupError by mutableStateOf<String?>(null)
-        private set
-
-    var liveTournId by mutableStateOf("")
-    var liveDivision by mutableStateOf("MPO")
-    var liveRound by mutableStateOf("1")
-    var liveLookupInProgress by mutableStateOf(false)
-        private set
-    var liveLookupResults by mutableStateOf<List<PdgaLiveResult>>(emptyList())
-        private set
-    var liveLookupError by mutableStateOf<String?>(null)
-        private set
-
-    fun prefillLiveTournId(tournamentId: String) {
-        if (liveTournId.isBlank()) liveTournId = tournamentId
-    }
 
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
@@ -155,57 +118,7 @@ class DataSourcesViewModel(
     fun logoutPdga() {
         pdgaLoggedIn = false
         pdgaUsername = null
-        pdgaLookupResult = null
-        pdgaLookupError = null
         viewModelScope.launch { pdgaRepository.logout() }
-    }
-
-    fun lookupPdgaPlayer(pdgaNumber: String) {
-        pdgaLookupInProgress = true
-        pdgaLookupError = null
-        pdgaLookupResult = null
-        viewModelScope.launch {
-            pdgaRepository.lookupPlayer(pdgaNumber)
-                .onSuccess { player ->
-                    if (player == null) pdgaLookupError = "No player found for #$pdgaNumber" else pdgaLookupResult = player
-                }
-                .onFailure { e -> pdgaLookupError = e.message ?: "Lookup failed" }
-            pdgaLookupInProgress = false
-        }
-    }
-
-    fun lookupAdgPlayer(name: String) {
-        adgLookupInProgress = true
-        adgLookupError = null
-        adgLookupResult = null
-        adgLookupNotFound = false
-        viewModelScope.launch {
-            adgRepository.lookupPlayerByName(name)
-                .onSuccess { row -> if (row == null) adgLookupNotFound = true else adgLookupResult = row }
-                .onFailure { e -> adgLookupError = e.message ?: "Lookup failed" }
-            adgLookupInProgress = false
-        }
-    }
-
-    fun lookupLiveResults() {
-        val tournId = liveTournId.trim()
-        val round = liveRound.trim().toIntOrNull()
-        if (tournId.isEmpty() || round == null) {
-            liveLookupError = "Enter a tournament ID and round number"
-            return
-        }
-        liveLookupInProgress = true
-        liveLookupError = null
-        liveLookupResults = emptyList()
-        viewModelScope.launch {
-            pdgaRepository.fetchLiveResults(tournId, liveDivision.trim().uppercase(), round)
-                .onSuccess { results ->
-                    liveLookupResults = results.sortedBy { it.teeTime }
-                    if (results.isEmpty()) liveLookupError = "No tee times published yet for this round"
-                }
-                .onFailure { e -> liveLookupError = e.message ?: "Lookup failed" }
-            liveLookupInProgress = false
-        }
     }
 }
 
@@ -215,7 +128,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
         DataSourcesViewModel(
             ServiceLocator.settingsRepository,
             ServiceLocator.pdgaRepository,
-            ServiceLocator.adgRepository,
             ServiceLocator.liveRosterRepository,
         )
     }
@@ -223,10 +135,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    androidx.compose.runtime.LaunchedEffect(settings.selectedTournamentId) {
-        settings.selectedTournamentId?.let { vm.prefillLiveTournId(it) }
-    }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -319,58 +227,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                 }
             }
 
-            if (vm.pdgaLoggedIn) {
-                item {
-                    Column {
-                        SectionLabel("Look Up a Real PDGA Player", modifier = Modifier.padding(bottom = 8.dp))
-                        Column(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            var pdgaNumber by remember { mutableStateOf("") }
-                            OutlinedTextField(
-                                value = pdgaNumber,
-                                onValueChange = { pdgaNumber = it },
-                                label = { Text("PDGA number") },
-                                singleLine = true,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
-                            )
-                            OutlineButton(
-                                text = if (vm.pdgaLookupInProgress) "Looking up…" else "Look Up",
-                                onClick = { vm.lookupPdgaPlayer(pdgaNumber) },
-                            )
-                            vm.pdgaLookupError?.let {
-                                Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
-                            }
-                            vm.pdgaLookupResult?.let { player ->
-                                Column(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ForestTint).padding(12.dp),
-                                ) {
-                                    Text(
-                                        "${player.firstName} ${player.lastName} · #${player.pdgaNumber}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = ForestDark,
-                                    )
-                                    Text(
-                                        "Rating ${player.rating ?: "—"} · ${player.membershipStatus} member" +
-                                            (player.city?.let { c -> " · $c, ${player.stateProv ?: player.country ?: ""}" } ?: ""),
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                        color = InkMuted,
-                                    )
-                                }
-                            }
-                            Text(
-                                "Real data from api.pdga.com — try your own PDGA number.",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = InkMuted,
-                            )
-                        }
-                    }
-                }
-            }
-
             item {
                 Column {
                     SectionLabel("Supplementary Source", modifier = Modifier.padding(bottom = 8.dp))
@@ -402,141 +258,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             )
                             OutlineButton(text = "Connect to ADG Tour", onClick = { vm.setAdgConnected(true) }, modifier = Modifier.padding(top = 14.dp))
                         }
-                    }
-                }
-            }
-
-            item {
-                Column {
-                    SectionLabel("Look Up a Real ADG Tour Player", modifier = Modifier.padding(bottom = 8.dp))
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        var playerName by remember { mutableStateOf("") }
-                        OutlinedTextField(
-                            value = playerName,
-                            onValueChange = { playerName = it },
-                            label = { Text("Player name") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
-                        )
-                        OutlineButton(
-                            text = if (vm.adgLookupInProgress) "Looking up…" else "Look Up",
-                            onClick = { vm.lookupAdgPlayer(playerName) },
-                        )
-                        vm.adgLookupError?.let {
-                            Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
-                        }
-                        if (vm.adgLookupNotFound) {
-                            Text(
-                                "Not found in the current ADG Tour standings.",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                color = InkMuted,
-                            )
-                        }
-                        vm.adgLookupResult?.let { row ->
-                            Column(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(AccentTint).padding(12.dp),
-                            ) {
-                                Text(
-                                    "${row.name} · #${row.rank} in ${row.division}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = ForestDark,
-                                )
-                                Text(
-                                    "ADG #${row.adgNumber} · ${row.points} pts · ${row.eventsPlayed} events (best 6 counted)",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                    color = InkMuted,
-                                )
-                            }
-                        }
-                        Text(
-                            "Real data scraped live from australiandiscgolf.com/leaderboard — no login needed. Try a name from the current standings, e.g. \"Jade Brady\".",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                            color = InkMuted,
-                        )
-                    }
-                }
-            }
-
-            item {
-                Column {
-                    SectionLabel("Look Up Real Starters & Tee Times", modifier = Modifier.padding(bottom = 8.dp))
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        OutlinedTextField(
-                            value = vm.liveTournId,
-                            onValueChange = { vm.liveTournId = it },
-                            label = { Text("Tournament ID") },
-                            singleLine = true,
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedTextField(
-                                value = vm.liveDivision,
-                                onValueChange = { vm.liveDivision = it },
-                                label = { Text("Division") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
-                            )
-                            OutlinedTextField(
-                                value = vm.liveRound,
-                                onValueChange = { vm.liveRound = it },
-                                label = { Text("Round") },
-                                singleLine = true,
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Forest),
-                            )
-                        }
-                        OutlineButton(
-                            text = if (vm.liveLookupInProgress) "Looking up…" else "Look Up Tee Times",
-                            onClick = vm::lookupLiveResults,
-                        )
-                        vm.liveLookupError?.let {
-                            Text(it, color = Accent, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
-                        }
-                        if (vm.liveLookupResults.isNotEmpty()) {
-                            val groups = vm.liveLookupResults
-                                .groupBy { it.teeTime }
-                                .entries
-                                .sortedWith(compareBy({ it.key.isEmpty() }, { it.key }))
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                groups.forEach { (teeTime, players) ->
-                                    Column(
-                                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ForestTint).padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    ) {
-                                        Text(
-                                            teeTime.ifEmpty { "Tee time TBD" },
-                                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp),
-                                            color = ForestDark,
-                                        )
-                                        players.forEach { p ->
-                                            Text(
-                                                "${p.firstName} ${p.lastName}" +
-                                                    (p.rating?.let { r -> " · $r" } ?: "") +
-                                                    (p.toPar?.let { tp -> " · ${tp.asScoreLabel()}" } ?: ""),
-                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                                color = InkMuted,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Text(
-                            "Real data from PDGA Live — only published shortly before a round tees off. Try TournID 101036, e.g. Division MPO, Round 3.",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                            color = InkMuted,
-                        )
                     }
                 }
             }

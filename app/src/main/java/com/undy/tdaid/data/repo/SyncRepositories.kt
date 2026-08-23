@@ -7,7 +7,6 @@ import com.undy.tdaid.data.remote.PdgaApiClient
 import com.undy.tdaid.data.remote.PdgaEventMeta
 import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.remote.PdgaLiveResult
-import com.undy.tdaid.data.remote.PdgaPlayerResult
 import com.undy.tdaid.data.remote.PdgaSession
 import kotlinx.coroutines.flow.first
 
@@ -21,7 +20,6 @@ interface PdgaRepository {
     val loggedInAs: String?
     suspend fun login(username: String, password: String): Result<Unit>
     suspend fun logout()
-    suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?>
     suspend fun searchEvents(query: String): Result<List<PdgaEventResult>>
     /** Real per-round tee times/pairings — unlike everything else here, this endpoint needs
      *  no PDGA login at all. */
@@ -62,11 +60,6 @@ class RealPdgaRepository(
         settingsRepository.clearPdgaSession()
     }
 
-    override suspend fun lookupPlayer(pdgaNumber: String): Result<PdgaPlayerResult?> = runCatching {
-        val activeSession = session ?: error("Not logged in to PDGA")
-        client.searchPlayer(activeSession, pdgaNumber)
-    }
-
     override suspend fun searchEvents(query: String): Result<List<PdgaEventResult>> = runCatching {
         val activeSession = session ?: error("Not logged in to PDGA")
         client.searchEvents(activeSession, query)
@@ -85,17 +78,11 @@ class RealPdgaRepository(
  * supplementary, optional source.
  */
 interface AdgRepository {
-    suspend fun lookupPlayerByName(name: String): Result<AdgLeaderboardRow?>
     /** The whole leaderboard in one request — used to enrich a real roster in bulk instead of
      *  looking up every player one at a time. */
     suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>>
 }
 
 class RealAdgRepository(private val scraper: AdgScraper = AdgScraper()) : AdgRepository {
-    override suspend fun lookupPlayerByName(name: String): Result<AdgLeaderboardRow?> = runCatching {
-        val rows = scraper.fetchLeaderboard()
-        rows.firstOrNull { it.name.equals(name, ignoreCase = true) }
-    }
-
     override suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>> = runCatching { scraper.fetchLeaderboard() }
 }

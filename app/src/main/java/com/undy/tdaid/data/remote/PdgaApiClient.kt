@@ -21,18 +21,6 @@ data class PdgaSession(
     val username: String,
 )
 
-data class PdgaPlayerResult(
-    val firstName: String,
-    val lastName: String,
-    val pdgaNumber: String,
-    val membershipStatus: String,
-    val rating: Int?,
-    val classification: String?,
-    val city: String?,
-    val stateProv: String?,
-    val country: String?,
-)
-
 data class PdgaEventResult(
     val tournamentId: String,
     val tournamentName: String,
@@ -111,41 +99,6 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
             PdgaSession(cookieName = sessionName, cookieValue = sessid, username = username)
         }
     }
-
-    suspend fun searchPlayer(session: PdgaSession, pdgaNumber: String): PdgaPlayerResult? =
-        withContext(Dispatchers.IO) {
-            val url = "$BASE_URL/services/json/players?pdga_number=$pdgaNumber"
-            val request = Request.Builder()
-                .url(url)
-                .header("Cookie", "${session.cookieName}=${session.cookieValue}")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                val text = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    throw PdgaApiException("Player search failed (HTTP ${response.code}): ${text.take(200)}")
-                }
-                val json = try {
-                    JSONObject(text)
-                } catch (e: Exception) {
-                    throw PdgaApiException("Unexpected player search response: ${text.take(200)}")
-                }
-                val players = json.optJSONArray("players") ?: return@use null
-                if (players.length() == 0) return@use null
-                val p = players.getJSONObject(0)
-                PdgaPlayerResult(
-                    firstName = p.optString("first_name").trim(),
-                    lastName = p.optString("last_name").trim(),
-                    pdgaNumber = p.optString("pdga_number").trim(),
-                    membershipStatus = p.optString("membership_status").trim(),
-                    rating = p.optString("rating").trim().toIntOrNull(),
-                    classification = p.optString("classification").trim().ifEmpty { null },
-                    city = p.optString("city").trim().ifEmpty { null },
-                    stateProv = p.optString("state_prov").trim().ifEmpty { null },
-                    country = p.optString("country").trim().ifEmpty { null },
-                )
-            }
-        }
 
     suspend fun searchEvents(session: PdgaSession, eventName: String): List<PdgaEventResult> =
         withContext(Dispatchers.IO) {

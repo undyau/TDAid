@@ -65,7 +65,7 @@ fun PillTag(
     }
 }
 
-private fun scoreColor(score: Int, onDark: Boolean): Color = when {
+fun scoreColor(score: Int, onDark: Boolean): Color = when {
     score < 0 -> if (onDark) ScoreGoodOnDark else ForestDark
     score > 0 -> Accent
     else -> if (onDark) Color.White.copy(alpha = 0.78f) else Ink

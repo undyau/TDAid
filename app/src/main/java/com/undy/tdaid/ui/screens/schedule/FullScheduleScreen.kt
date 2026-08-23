@@ -39,16 +39,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import com.undy.tdaid.data.ServiceLocator
+import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.RowStatus
 import com.undy.tdaid.data.model.ScheduleRow
+import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
+import com.undy.tdaid.ui.components.scoreColor
 import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
@@ -77,7 +84,7 @@ class FullScheduleViewModel(
     fun rowsFor(rosters: Map<String, LiveRoster>): List<ScheduleRow> {
         if (rosters.isEmpty()) return demoRows
 
-        data class Raw(val time: String, val division: String, val names: String, val millis: Long?)
+        data class Raw(val time: String, val division: String, val players: List<Player>, val millis: Long?)
         val now = System.currentTimeMillis()
         val raw = rosters.entries
             .flatMap { (division, roster) ->
@@ -85,7 +92,7 @@ class FullScheduleViewModel(
                     Raw(
                         time = group.time,
                         division = division,
-                        names = group.players.joinToString(" / ") { it.name },
+                        players = group.players,
                         millis = TeeAlarmScheduler.parseTodayMillis(group.time),
                     )
                 }
@@ -100,7 +107,13 @@ class FullScheduleViewModel(
                 index == nextUpcomingIndex -> RowStatus.CURRENT
                 else -> RowStatus.UPCOMING
             }
-            ScheduleRow(time = r.time, division = r.division, names = r.names, status = status)
+            ScheduleRow(
+                time = r.time,
+                division = r.division,
+                names = r.players.joinToString(" / ") { it.name },
+                status = status,
+                players = r.players,
+            )
         }
     }
 }
@@ -195,7 +208,27 @@ private fun ScheduleRowItem(row: ScheduleRow) {
             modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(ForestTint).padding(horizontal = 7.dp, vertical = 3.dp),
         )
         Spacer(Modifier.width(9.dp))
-        Text(row.names, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted, modifier = Modifier.weight(1f))
+        if (row.players.isNotEmpty()) {
+            Text(
+                buildAnnotatedString {
+                    row.players.forEachIndexed { index, player ->
+                        if (index > 0) append("  ·  ")
+                        append(player.name)
+                        player.overall?.let { overall ->
+                            append(" ")
+                            withStyle(SpanStyle(color = scoreColor(overall.scoreToPar, onDark = false), fontWeight = FontWeight.Bold)) {
+                                append(overall.scoreToPar.asScoreLabel())
+                            }
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = InkMuted,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            Text(row.names, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted, modifier = Modifier.weight(1f))
+        }
         if (isDone) {
             Icon(Icons.Filled.Check, contentDescription = "Done", tint = InkMuted, modifier = Modifier.size(14.dp))
         }

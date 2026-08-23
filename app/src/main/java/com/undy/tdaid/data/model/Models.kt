@@ -61,6 +61,9 @@ data class ScheduleRow(
     val division: String,
     val names: String,
     val status: RowStatus,
+    /** The real players in this group, if any — lets the schedule show each player's real live
+     *  score alongside their name instead of just plain text. Empty for the demo schedule. */
+    val players: List<Player> = emptyList(),
 )
 
 /** Strokes relative to par, formatted the way an announcer would say it: "-4", "+3", or "E". */

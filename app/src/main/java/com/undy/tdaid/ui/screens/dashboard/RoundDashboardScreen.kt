@@ -80,6 +80,7 @@ class DashboardViewModel(
     val liveLoading = liveRosterRepository.loading
     val liveLoadingStatus = liveRosterRepository.loadingStatus
     val profilePrefetchStatus = liveRosterRepository.profilePrefetchStatus
+    val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
     val liveError = liveRosterRepository.error
 
     /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
@@ -108,8 +109,16 @@ class DashboardViewModel(
         settingsRepository.setAnnounceInterval(settings.value.announceIntervalMin - 1)
     }
 
-    fun refreshSync() = viewModelScope.launch {
-        settingsRepository.markSyncedNow()
+    /** For a real tournament this actually re-fetches every division from PDGA Live, not just a
+     *  timestamp stamp — the old demo-era version only ever faked a "just synced" label without
+     *  refreshing any real data. */
+    fun refreshSync() {
+        val tournamentId = settings.value.selectedTournamentId
+        if (tournamentId != null) {
+            liveRosterRepository.loadAllDivisions(tournamentId)
+        } else {
+            viewModelScope.launch { settingsRepository.markSyncedNow() }
+        }
     }
 }
 
@@ -128,6 +137,7 @@ fun RoundDashboardScreen(
     val liveLoading by vm.liveLoading.collectAsState()
     val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
     val profilePrefetchStatus by vm.profilePrefetchStatus.collectAsState()
+    val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     val liveError by vm.liveError.collectAsState()
     val divisions = vm.divisionsFor(eventDivisions)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -234,7 +244,11 @@ fun RoundDashboardScreen(
                     Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(Forest))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Synced with PDGA · ${formatRelative(settings.lastSyncedAtMillis, nowTick)}",
+                        if (settings.selectedTournamentId != null) {
+                            lastLoadedAtMillis?.let { "Synced with PDGA · ${formatRelative(it, nowTick)}" } ?: "Not synced yet"
+                        } else {
+                            "Synced with PDGA · ${formatRelative(settings.lastSyncedAtMillis, nowTick)}"
+                        },
                         color = ForestDark,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.5.sp),
                         modifier = Modifier.weight(1f),

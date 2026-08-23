@@ -49,6 +49,7 @@ import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.TournamentRepository
 import com.undy.tdaid.notify.TeeAlarmScheduler
+import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.Border
@@ -67,6 +68,7 @@ class FullScheduleViewModel(
 ) : ViewModel() {
     private val demoRows: List<ScheduleRow> = tournamentRepository.fullSchedule()
     val rosters = liveRosterRepository.rosters
+    val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
 
     /** A real cross-division schedule once every division has loaded — the demo one until then.
      *  Status is derived from the real tee times against the current time: passed means done,
@@ -107,6 +109,7 @@ class FullScheduleViewModel(
 fun FullScheduleScreen(onBack: () -> Unit) {
     val vm = rememberViewModel { FullScheduleViewModel(ServiceLocator.tournamentRepository, ServiceLocator.liveRosterRepository) }
     val rosters by vm.rosters.collectAsState()
+    val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     val rows = vm.rowsFor(rosters)
     val divisionFilters = listOf("ALL") + rows.map { it.division }.distinct()
     var filter by remember { mutableStateOf("ALL") }
@@ -134,7 +137,11 @@ fun FullScheduleScreen(onBack: () -> Unit) {
         ) {
             Icon(Icons.Filled.WifiOff, contentDescription = null, tint = InkMuted, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Offline · cached 7:42 AM", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = InkMuted)
+            Text(
+                lastLoadedAtMillis?.let { "Offline · cached ${formatRelative(it)}" } ?: "Offline · cached",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp),
+                color = InkMuted,
+            )
         }
 
         Spacer(Modifier.padding(top = 6.dp))

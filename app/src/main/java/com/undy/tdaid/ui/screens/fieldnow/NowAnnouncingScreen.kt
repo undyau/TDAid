@@ -62,6 +62,7 @@ import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.RoundStatRow
 import com.undy.tdaid.ui.components.ScoreChip
 import com.undy.tdaid.ui.components.SectionLabel
+import com.undy.tdaid.ui.formatRelative
 import com.undy.tdaid.ui.rememberViewModel
 import com.undy.tdaid.ui.theme.Accent
 import com.undy.tdaid.ui.theme.AccentTint
@@ -87,6 +88,7 @@ class NowAnnouncingViewModel(
 ) : ViewModel() {
     private val demoGroups: List<TeeGroup> = tournamentRepository.teeGroups()
     val rosters = liveRosterRepository.rosters
+    val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
     val groups = rosters
         .map { byDivision -> byDivision[divisionCode]?.groups ?: demoGroups }
         .stateIn(viewModelScope, SharingStarted.Eagerly, demoGroups)
@@ -120,6 +122,7 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
     val context = LocalContext.current
     val groups by vm.groups.collectAsState()
     val rosters by vm.rosters.collectAsState()
+    val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
     // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
@@ -144,7 +147,11 @@ fun NowAnnouncingScreen(divisionCode: String, onOpenSchedule: () -> Unit, onOpen
             ) {
                 Icon(Icons.Filled.WifiOff, contentDescription = null, tint = InkMuted, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Offline · cached 7:42 AM", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = InkMuted)
+                Text(
+                    lastLoadedAtMillis?.let { "Offline · cached ${formatRelative(it)}" } ?: "Offline · cached",
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp),
+                    color = InkMuted,
+                )
             }
             Spacer(Modifier.width(8.dp))
             Text("$divisionCode · ${vm.roundLabel(rosters)}", style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.sp), color = ForestDark, modifier = Modifier.weight(1f))

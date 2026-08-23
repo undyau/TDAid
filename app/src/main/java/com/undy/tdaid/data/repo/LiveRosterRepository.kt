@@ -58,6 +58,10 @@ interface LiveRosterRepository {
     /** Progress for the slow, throttled per-player profile fetch that runs after the roster
      *  itself is loaded, e.g. "Loading player profiles… (12/137)". Null when not running. */
     val profilePrefetchStatus: StateFlow<String?>
+    /** When the roster itself last finished loading (not the slower profile prefetch) — the real
+     *  answer to "how stale is this cached data", for screens that used to show a fixed fake
+     *  timestamp. Null until the first successful load. */
+    val lastLoadedAtMillis: StateFlow<Long?>
     val error: StateFlow<String?>
 
     /** Loads one division/round on demand — used for a manual reload, or a round the TD picks
@@ -94,6 +98,8 @@ class RealLiveRosterRepository(
     override val loadingStatus: StateFlow<String?> = _loadingStatus.asStateFlow()
     private val _profilePrefetchStatus = MutableStateFlow<String?>(null)
     override val profilePrefetchStatus: StateFlow<String?> = _profilePrefetchStatus.asStateFlow()
+    private val _lastLoadedAtMillis = MutableStateFlow<Long?>(null)
+    override val lastLoadedAtMillis: StateFlow<Long?> = _lastLoadedAtMillis.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     override val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -106,6 +112,7 @@ class RealLiveRosterRepository(
             fetchOneDivision(tournamentId, division, round)
                 .onSuccess { roster ->
                     _rosters.update { it + (division to roster) }
+                    _lastLoadedAtMillis.value = System.currentTimeMillis()
                     if (roster.groups.isEmpty()) _error.value = "No tee times published yet for this round"
                 }
                 .onFailure { e -> _error.value = e.message ?: "Live lookup failed" }
@@ -130,6 +137,7 @@ class RealLiveRosterRepository(
                             .onFailure { e -> _error.value = "${division.code}: ${e.message ?: "lookup failed"}" }
                     }
                     _rosters.value = loaded
+                    _lastLoadedAtMillis.value = System.currentTimeMillis()
                     _loadingStatus.value = null
                     _loading.value = false
                     enrichWithAdg()
@@ -150,6 +158,7 @@ class RealLiveRosterRepository(
         _eventDivisions.value = emptyList()
         _error.value = null
         _profilePrefetchStatus.value = null
+        _lastLoadedAtMillis.value = null
     }
 
     private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> =

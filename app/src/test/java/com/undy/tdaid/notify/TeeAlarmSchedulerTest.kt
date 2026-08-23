@@ -49,4 +49,28 @@ class TeeAlarmSchedulerTest {
         assertNull(TeeAlarmScheduler.parseTodayMillis("not a time"))
         assertNull(TeeAlarmScheduler.parseTodayMillis(""))
     }
+
+    @Test
+    fun `parses a real PDGA Live 24-hour time with seconds`() {
+        val millis = TeeAlarmScheduler.parseTodayMillis("14:30:00")
+        assertEquals(14 to 30, millis?.let { hourAndMinuteOf(it) })
+    }
+
+    @Test
+    fun `parses a real PDGA Live 24-hour time before noon`() {
+        val millis = TeeAlarmScheduler.parseTodayMillis("09:03:00")
+        assertEquals(9 to 3, millis?.let { hourAndMinuteOf(it) })
+    }
+
+    @Test
+    fun `parses 24-hour midnight and last minute of the day correctly`() {
+        assertEquals(0 to 0, TeeAlarmScheduler.parseTodayMillis("00:00:00")?.let { hourAndMinuteOf(it) })
+        assertEquals(23 to 59, TeeAlarmScheduler.parseTodayMillis("23:59:00")?.let { hourAndMinuteOf(it) })
+    }
+
+    @Test
+    fun `rejects an out-of-range 24-hour time rather than misreading it`() {
+        assertNull(TeeAlarmScheduler.parseTodayMillis("24:00:00"))
+        assertNull(TeeAlarmScheduler.parseTodayMillis("12:60:00"))
+    }
 }

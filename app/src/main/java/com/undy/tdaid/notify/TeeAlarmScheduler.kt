@@ -7,10 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.undy.tdaid.data.model.TeeGroup
-import java.text.ParseException
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 
 private const val TAG = "TeeAlarmScheduler"
 const val EXTRA_TIME = "time"
@@ -23,7 +20,12 @@ const val EXTRA_NAMES = "names"
  */
 object TeeAlarmScheduler {
 
-    private val timeFormat = SimpleDateFormat("h:mm a", Locale.US)
+    // Demo data uses a 12-hour "8:30 AM" style label; real PDGA Live tee times come back as
+    // 24-hour "HH:mm:ss". Matched as plain regex rather than SimpleDateFormat, since a lenient
+    // SimpleDateFormat parse of one pattern against the other's input risks silently succeeding
+    // with a wrong result rather than throwing.
+    private val twelveHourPattern = Regex("""^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$""")
+    private val twentyFourHourPattern = Regex("""^(\d{1,2}):(\d{2})(?::\d{2})?$""")
 
     /** Schedules one alarm per group whose (tee time - interval) hasn't passed yet today.
      *  Groups already inside their announce window, or fully in the past, are skipped —
@@ -87,23 +89,33 @@ object TeeAlarmScheduler {
         )
     }
 
-    /** Parses a display string like "8:30 AM" against today's date. Real tee-time data would
-     *  carry a full timestamp; this fake dataset only has a time-of-day string.
-     *  Internal (rather than private) so it can be unit tested directly. */
+    /** Parses a display string like "8:30 AM" (demo) or "14:30:00" (real PDGA Live) against
+     *  today's date. Internal (rather than private) so it can be unit tested directly. */
     internal fun parseTodayMillis(timeLabel: String): Long? {
-        val parsedTimeOfDay = try {
-            timeFormat.parse(timeLabel)
-        } catch (e: ParseException) {
-            null
-        } ?: return null
-
-        val timeCal = Calendar.getInstance().apply { time = parsedTimeOfDay }
+        val (hour, minute) = parseHourMinute(timeLabel.trim()) ?: return null
         val target = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
-            set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
         return target.timeInMillis
+    }
+
+    private fun parseHourMinute(timeLabel: String): Pair<Int, Int>? {
+        twelveHourPattern.find(timeLabel)?.let { match ->
+            var hour = match.groupValues[1].toIntOrNull() ?: return null
+            val minute = match.groupValues[2].toIntOrNull() ?: return null
+            if (hour !in 1..12 || minute !in 0..59) return null
+            hour %= 12
+            if (match.groupValues[3].equals("PM", ignoreCase = true)) hour += 12
+            return hour to minute
+        }
+        twentyFourHourPattern.find(timeLabel)?.let { match ->
+            val hour = match.groupValues[1].toIntOrNull() ?: return null
+            val minute = match.groupValues[2].toIntOrNull() ?: return null
+            if (hour in 0..23 && minute in 0..59) return hour to minute
+        }
+        return null
     }
 }

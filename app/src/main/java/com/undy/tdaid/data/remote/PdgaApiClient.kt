@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
@@ -66,6 +67,15 @@ data class PdgaCourseMeta(
 data class PdgaEventMeta(
     val divisions: List<PdgaDivisionMeta>,
     val latestRound: Int,
+    val courses: List<PdgaCourseMeta>,
+)
+
+/** One division/round's real tee times plus the specific course(s) that division actually played —
+ *  a multi-course event (e.g. separate Am/Pro sites) publishes a different `layouts` list per
+ *  division/round fetch, which is the only reliable way to tie a course to a division; the
+ *  event-level layout list has no division field to match against. */
+data class PdgaLiveDivisionResult(
+    val results: List<PdgaLiveResult>,
     val courses: List<PdgaCourseMeta>,
 )
 
@@ -147,7 +157,7 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
      *  found via the browser Network tab (`live_results_fetch_round`), since it's not part of
      *  PDGA's documented REST API and isn't discoverable from the Live scoring page's raw HTML
      *  (that page loads its data client-side, from this same endpoint, after the page renders). */
-    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): List<PdgaLiveResult> =
+    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): PdgaLiveDivisionResult =
         withContext(Dispatchers.IO) {
             val url = "$LIVE_BASE_URL/live_results_fetch_round?TournID=$tournamentId&Division=$division&Round=$round"
             val request = Request.Builder().url(url).build()
@@ -162,8 +172,11 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                 } catch (e: Exception) {
                     throw PdgaApiException("Unexpected live results response: ${text.take(200)}")
                 }
-                val scores = json.optJSONObject("data")?.optJSONArray("scores") ?: return@use emptyList()
-                (0 until scores.length()).map { i ->
+                val data = json.optJSONObject("data")
+                val courses = parseCourses(data?.optJSONArray("layouts"))
+                val scores = data?.optJSONArray("scores")
+                    ?: return@use PdgaLiveDivisionResult(results = emptyList(), courses = courses)
+                val results = (0 until scores.length()).map { i ->
                     val s = scores.getJSONObject(i)
                     PdgaLiveResult(
                         teeTime = s.optString("TeeTime").trim(),
@@ -176,6 +189,7 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                         toPar = if (s.has("ToPar") && !s.isNull("ToPar")) s.optInt("ToPar") else null,
                     )
                 }
+                PdgaLiveDivisionResult(results = results, courses = courses)
             }
         }
 
@@ -206,16 +220,20 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                     playerCount = d.optInt("Players"),
                 )
             }
-            val layoutsJson = data.optJSONArray("Layouts")
-            // Real events sometimes publish a layout with no course attached (e.g. a placeholder
-            // "sudden death" entry) — those have no CourseID/CourseName and are skipped.
-            val courses = (if (layoutsJson == null) emptyList() else (0 until layoutsJson.length()).mapNotNull { i ->
-                val l = layoutsJson.getJSONObject(i)
-                val courseId = if (l.has("CourseID") && !l.isNull("CourseID")) l.optInt("CourseID") else null
-                val name = l.optString("CourseName").trim()
-                if (courseId == null || name.isEmpty()) null else PdgaCourseMeta(courseId, name)
-            }).distinctBy { it.courseId }
+            val courses = parseCourses(data.optJSONArray("Layouts"))
             PdgaEventMeta(divisions = divisions, latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1), courses = courses)
         }
     }
+
+    /** Shared by [fetchEventMeta] (event-wide, key `"Layouts"`) and [fetchLiveResults]
+     *  (one division/round, key `"layouts"`) — same shape either way. Real events sometimes
+     *  publish a layout with no course attached (e.g. a placeholder "sudden death" entry); those
+     *  have no CourseID/CourseName and are skipped. */
+    private fun parseCourses(layoutsJson: JSONArray?): List<PdgaCourseMeta> =
+        (if (layoutsJson == null) emptyList() else (0 until layoutsJson.length()).mapNotNull { i ->
+            val l = layoutsJson.getJSONObject(i)
+            val courseId = if (l.has("CourseID") && !l.isNull("CourseID")) l.optInt("CourseID") else null
+            val name = l.optString("CourseName").trim()
+            if (courseId == null || name.isEmpty()) null else PdgaCourseMeta(courseId, name)
+        }).distinctBy { it.courseId }
 }

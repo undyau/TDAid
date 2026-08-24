@@ -27,12 +27,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** One real division/round's worth of starters & tee times, fetched from PDGA Live. */
+/** One real division/round's worth of starters & tee times, fetched from PDGA Live. [courses] is
+ *  specifically what that division/round played — an event with per-division sites (e.g. a
+ *  separate Am and Pro course) publishes a different course list per division, unlike the
+ *  event-wide list which has no per-division breakdown. */
 data class LiveRoster(
     val tournamentId: String,
     val division: String,
     val round: Int,
     val groups: List<TeeGroup>,
+    val courses: List<PdgaCourseMeta> = emptyList(),
 )
 
 /** Re-buckets every loaded division's players by tee time from scratch, rather than just
@@ -230,7 +234,8 @@ class RealLiveRosterRepository(
     }
 
     private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> =
-        pdgaRepository.fetchLiveResults(tournamentId, division, round).map { results ->
+        pdgaRepository.fetchLiveResults(tournamentId, division, round).map { divisionResult ->
+            val results = divisionResult.results
             val positions = standingsFor(results)
             // Real foursomes group by TeeTime, not the API's CardNum (which turned out to be
             // a ~30-player wave/pod id, not a playing group — confirmed against live data).
@@ -258,7 +263,7 @@ class RealLiveRosterRepository(
                         },
                     )
                 }
-            LiveRoster(tournamentId, division, round, groups)
+            LiveRoster(tournamentId, division, round, groups, courses = divisionResult.courses)
         }
 
     /** Real standings computed from the same live results already fetched — no extra call. Ties

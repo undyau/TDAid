@@ -126,6 +126,17 @@ class NowAnnouncingViewModel(
 
 private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min")
 
+/** Course name(s) for [group]'s division(s) — only worth surfacing when the event actually spans
+ *  more than one course, since otherwise it's just the one course every screen already names.
+ *  Union across every division represented in the group (a shared tee time can mix divisions),
+ *  deduped, so a mixed card never shows the same course name twice. */
+fun coursesForGroup(group: TeeGroup, rosters: Map<String, LiveRoster>): List<String> {
+    val allCourseIds = rosters.values.flatMap { it.courses }.distinctBy { it.courseId }
+    if (allCourseIds.size <= 1) return emptyList()
+    val divisions = group.players.map { it.division }.distinct()
+    return divisions.flatMap { rosters[it]?.courses.orEmpty() }.distinctBy { it.courseId }.map { it.name }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
@@ -205,8 +216,19 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                             if (vm.done(groups)) "Final card of the day" else "Announcing now · ${settings.announceIntervalMin} min before start",
                             color = Cream.copy(alpha = 0.75f),
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                            modifier = Modifier.padding(top = 2.dp, bottom = 13.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                         )
+                        val courses = coursesForGroup(current, rosters)
+                        if (courses.isNotEmpty()) {
+                            Text(
+                                courses.joinToString(" · "),
+                                color = Cream.copy(alpha = 0.75f),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                modifier = Modifier.padding(top = 1.dp, bottom = 13.dp),
+                            )
+                        } else {
+                            Spacer(Modifier.height(13.dp))
+                        }
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Cream.copy(alpha = 0.18f)).padding(bottom = 11.dp))
                         Spacer(Modifier.width(0.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {

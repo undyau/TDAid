@@ -6,7 +6,7 @@ import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
 import com.undy.tdaid.data.remote.PdgaEventMeta
 import com.undy.tdaid.data.remote.PdgaEventResult
-import com.undy.tdaid.data.remote.PdgaLiveResult
+import com.undy.tdaid.data.remote.PdgaLiveDivisionResult
 import com.undy.tdaid.data.remote.PdgaSession
 import kotlinx.coroutines.flow.first
 
@@ -23,7 +23,7 @@ interface PdgaRepository {
     suspend fun searchEvents(query: String): Result<List<PdgaEventResult>>
     /** Real per-round tee times/pairings — unlike everything else here, this endpoint needs
      *  no PDGA login at all. */
-    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<List<PdgaLiveResult>>
+    suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<PdgaLiveDivisionResult>
     /** Real division list + current round for a tournament — also needs no login. */
     suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta>
 }
@@ -65,7 +65,7 @@ class RealPdgaRepository(
         client.searchEvents(activeSession, query)
     }
 
-    override suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<List<PdgaLiveResult>> =
+    override suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<PdgaLiveDivisionResult> =
         runCatching { client.fetchLiveResults(tournamentId, division, round) }
 
     override suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta> =

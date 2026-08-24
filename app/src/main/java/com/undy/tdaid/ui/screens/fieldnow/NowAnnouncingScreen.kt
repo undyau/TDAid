@@ -247,7 +247,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             item {
                 when {
                     groups.isEmpty() -> Text(
-                        "No real tournament loaded yet — select and load one from Setup Mode.",
+                        "No tournament loaded yet — select and load one from Setup Mode.",
                         color = InkMuted,
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.fillMaxWidth(),

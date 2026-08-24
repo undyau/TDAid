@@ -150,7 +150,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
             if (settings.selectedTournamentId == null) {
                 item {
                     Text(
-                        "No tournament selected — pick a real PDGA event from Setup Mode first.",
+                        "No tournament selected — pick a PDGA event from Setup Mode first.",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                         color = InkMuted,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
@@ -163,7 +163,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            "Real PDGA event selected",
+                            "PDGA event selected",
                             style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
                             color = Ink,
                         )
@@ -188,7 +188,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                                 onIncrement = { vm.changeRound(vm.round + 1) },
                             )
                             OutlineButton(
-                                text = "Load Real Starters & Tee Times",
+                                text = "Load Starters & Tee Times",
                                 onClick = vm::loadRealRoster,
                             )
                         }

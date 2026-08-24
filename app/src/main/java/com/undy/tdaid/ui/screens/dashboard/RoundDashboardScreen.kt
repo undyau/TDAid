@@ -187,7 +187,7 @@ fun RoundDashboardScreen(
             item {
                 val realTournament = settings.selectedTournamentName != null
                 val displayedName = settings.selectedTournamentName ?: "No tournament selected"
-                val displayedDates = settings.selectedTournamentDates ?: "Tap to search real PDGA events"
+                val displayedDates = settings.selectedTournamentDates ?: "Tap to search PDGA events"
                 Column {
                     Row(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor)
@@ -212,11 +212,11 @@ fun RoundDashboardScreen(
                         Row(Modifier.padding(top = 5.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 when {
-                                    liveLoadingStatus != null -> "Real PDGA event · $liveLoadingStatus"
-                                    profilePrefetchStatus != null -> "Real PDGA event · $profilePrefetchStatus"
-                                    eventDivisions.isNotEmpty() -> "Real PDGA event · real divisions, starters & tee times loaded"
-                                    liveError != null -> "Real PDGA event · $liveError"
-                                    else -> "Real PDGA event · loading real divisions…"
+                                    liveLoadingStatus != null -> "PDGA event · $liveLoadingStatus"
+                                    profilePrefetchStatus != null -> "PDGA event · $profilePrefetchStatus"
+                                    eventDivisions.isNotEmpty() -> "PDGA event · divisions, starters & tee times loaded"
+                                    liveError != null -> "PDGA event · $liveError"
+                                    else -> "PDGA event · loading divisions…"
                                 },
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
                                 color = InkMuted,
@@ -287,7 +287,7 @@ fun RoundDashboardScreen(
                     SectionLabel("Divisions", modifier = Modifier.padding(bottom = 10.dp))
                     if (divisions.isEmpty()) {
                         Text(
-                            "Select a real PDGA tournament above to load its divisions.",
+                            "Select a PDGA tournament above to load its divisions.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             color = InkMuted,
                         )
@@ -362,7 +362,7 @@ private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Un
         Column(Modifier.weight(1f)) {
             Text(division.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp), color = Ink)
             Text(
-                "${division.starterCount} real starter${if (division.starterCount == 1) "" else "s"}",
+                "${division.starterCount} starter${if (division.starterCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                 color = InkMuted,
             )

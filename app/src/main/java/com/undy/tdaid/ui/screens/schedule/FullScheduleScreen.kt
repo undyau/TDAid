@@ -185,7 +185,7 @@ fun FullScheduleScreen(onBack: () -> Unit) {
 
         if (rows.isEmpty()) {
             Text(
-                "No schedule loaded yet — select and load a real tournament from Setup Mode.",
+                "No schedule loaded yet — select and load a tournament from Setup Mode.",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = InkMuted,
                 modifier = Modifier.padding(16.dp),

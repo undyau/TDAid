@@ -175,7 +175,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                                 icon = Icons.Filled.Link,
                                 connected = false,
                                 title = "Not connected",
-                                subtitle = "Log in with your real PDGA membership to pull ratings, results and bios — this hits the actual PDGA REST API.",
+                                subtitle = "Log in with your PDGA membership to pull ratings, results and bios — this hits the actual PDGA REST API.",
                             )
                             var username by remember { mutableStateOf("") }
                             var password by remember { mutableStateOf("") }
@@ -217,7 +217,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 14.dp)) {
                         ToggleRow(
                             "Player profiles",
-                            "Member-since date, recent results & auto-bio for every real starter — loaded once per event (no PDGA login needed). Turn off for a faster, bare roster.",
+                            "Member-since date, recent results & auto-bio for every starter — loaded once per event (no PDGA login needed). Turn off for a faster, bare roster.",
                             settings.fetchPlayerProfiles,
                             { vm.setFetchPlayerProfiles(it) },
                         )

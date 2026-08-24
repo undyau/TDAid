@@ -141,7 +141,7 @@ fun TeeTimeAlertScreen() {
         ) {
             Icon(Icons.Filled.Notifications, contentDescription = null, tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(28.dp))
             Text(
-                "No real tournament loaded yet",
+                "No tournament loaded yet",
                 color = Cream,
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 16.sp),
                 modifier = Modifier.padding(top = 12.dp),

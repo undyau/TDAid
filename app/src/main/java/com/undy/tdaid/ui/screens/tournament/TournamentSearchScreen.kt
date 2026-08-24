@@ -144,7 +144,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
             }
             Column {
                 Text("Select Tournament", color = Cream, style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.sp))
-                Text("Real PDGA Event Search", color = Cream.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
+                Text("PDGA Event Search", color = Cream.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
             }
         }
 
@@ -160,7 +160,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Text(
-                            "Log in to PDGA to search real tournaments",
+                            "Log in to PDGA to search tournaments",
                             style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
                             color = Ink,
                         )
@@ -197,7 +197,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
 
             item {
                 Text(
-                    "Picking a real event loads its real divisions, starters and tee times from PDGA Live automatically — give it a few seconds after returning to the dashboard.",
+                    "Picking an event loads its divisions, starters and tee times from PDGA Live automatically — give it a few seconds after returning to the dashboard.",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = InkMuted,
                 )

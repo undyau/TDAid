@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.Alignment
@@ -81,6 +82,7 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -124,7 +126,19 @@ class NowAnnouncingViewModel(
     fun closeBio() { bioPlayerId = null }
 }
 
-private val onDeckCountdownLabels = listOf("in 11 min", "in 22 min", "in 33 min")
+/** Real minutes between [nowMillis] and [group]'s actual tee time — replaces what used to be a
+ *  fixed "in 11/22/33 min" placeholder regardless of the real gap between groups. Blank when the
+ *  time doesn't parse (e.g. no tee time published yet), same as no badge at all. Internal (rather
+ *  than private) so it can be unit tested directly. */
+internal fun countdownLabel(group: TeeGroup, nowMillis: Long): String {
+    val teeMillis = TeeAlarmScheduler.parseTodayMillis(group.time) ?: return ""
+    val diffMinutes = Math.round((teeMillis - nowMillis) / 60_000.0).toInt()
+    return when {
+        diffMinutes > 0 -> "in $diffMinutes min"
+        diffMinutes == 0 -> "now"
+        else -> "${-diffMinutes} min ago"
+    }
+}
 
 /** Course name(s) for [group]'s division(s) — only worth surfacing when the event actually spans
  *  more than one course, since otherwise it's just the one course every screen already names.
@@ -155,6 +169,16 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     LaunchedEffect(groups) {
         val intervalMinutes = ServiceLocator.settingsRepository.settings.first().announceIntervalMin
         TeeAlarmScheduler.scheduleAll(context.applicationContext, groups, intervalMinutes)
+    }
+
+    // On Deck's "in X min" is real time-until-tee-time, not a fixed label — ticks so it keeps
+    // reading correctly the whole time a TD leaves this screen open during a round.
+    var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            nowTick = System.currentTimeMillis()
+        }
     }
 
     Column(
@@ -299,7 +323,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                         SectionLabel("On Deck", modifier = Modifier.padding(bottom = 9.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             vm.onDeck(groups).forEachIndexed { index, group ->
-                                OnDeckRow(group = group, countdown = onDeckCountdownLabels.getOrElse(index) { "" }, urgent = index == 0, onPlayerClick = vm::openBio)
+                                OnDeckRow(group = group, countdown = countdownLabel(group, nowTick), urgent = index == 0, onPlayerClick = vm::openBio)
                             }
                         }
                     }

@@ -5,6 +5,7 @@ import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.remote.PdgaCourseMeta
 import com.undy.tdaid.data.repo.LiveRoster
+import com.undy.tdaid.notify.TeeAlarmScheduler
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -67,5 +68,39 @@ class CoursesForGroupTest {
             division = "",
         )
         assertEquals(listOf("Tali Disc Golf Park", "Detroit Palmer Park"), coursesForGroup(mixedGroup, rosters))
+    }
+}
+
+class CountdownLabelTest {
+    private fun group(time: String) = TeeGroup(time = time, players = emptyList())
+
+    @Test
+    fun `shows real minutes remaining, not a fixed placeholder`() {
+        val now = TeeAlarmScheduler.parseTodayMillis("09:00:00")!!
+        assertEquals("in 30 min", countdownLabel(group("09:30:00"), now))
+        assertEquals("in 90 min", countdownLabel(group("10:30:00"), now))
+        assertEquals("in 5 min", countdownLabel(group("09:05:00"), now))
+    }
+
+    @Test
+    fun `rounds to the nearest minute`() {
+        // Tee times are always minute-granular (parseTodayMillis drops seconds), but the real
+        // "now" this is compared against isn't — so the diff is realistically fractional.
+        val teeMillis = TeeAlarmScheduler.parseTodayMillis("09:01:00")!!
+        val now = teeMillis - 40_000L // 40 real seconds before the tee time
+        assertEquals("in 1 min", countdownLabel(group("09:01:00"), now))
+    }
+
+    @Test
+    fun `reports a group already at or past its tee time`() {
+        val now = TeeAlarmScheduler.parseTodayMillis("09:00:00")!!
+        assertEquals("now", countdownLabel(group("09:00:00"), now))
+        assertEquals("10 min ago", countdownLabel(group("08:50:00"), now))
+    }
+
+    @Test
+    fun `blank when the tee time doesn't parse`() {
+        val now = TeeAlarmScheduler.parseTodayMillis("09:00:00")!!
+        assertEquals("", countdownLabel(group("TBD"), now))
     }
 }

@@ -12,6 +12,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /** A TD's manually-entered notes about a player, persisted so they carry forward to future rounds. */
@@ -76,6 +77,10 @@ abstract class AppDatabase : RoomDatabase() {
 interface BioNotesRepository {
     fun observeNote(playerId: String): Flow<BioNote?>
     suspend fun saveNote(note: BioNote)
+    /** Folds imported text into [playerId]'s bio note, creating one if none exists yet. Existing
+     *  bio text is kept, with the new text appended — this is meant for bulk CSV import, where
+     *  overwriting a TD's existing notes outright would be surprising. */
+    suspend fun appendBio(playerId: String, additionalText: String)
     suspend fun clearAll()
 }
 
@@ -85,6 +90,23 @@ class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
 
     override suspend fun saveNote(note: BioNote) {
         dao.upsert(note.toEntity())
+    }
+
+    override suspend fun appendBio(playerId: String, additionalText: String) {
+        val existing = dao.observe(playerId).first()?.toDomain()
+        val merged = existing?.copy(
+            bio = if (existing.bio.isBlank()) additionalText else "${existing.bio}\n\n$additionalText",
+            updatedAtMillis = System.currentTimeMillis(),
+        ) ?: BioNote(
+            playerId = playerId,
+            pronunciation = "",
+            hometown = "",
+            bio = additionalText,
+            savedToLibrary = true,
+            sourceRoundLabel = null,
+            updatedAtMillis = System.currentTimeMillis(),
+        )
+        dao.upsert(merged.toEntity())
     }
 
     override suspend fun clearAll() {

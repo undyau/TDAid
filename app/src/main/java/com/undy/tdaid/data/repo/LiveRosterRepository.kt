@@ -7,6 +7,7 @@ import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
+import com.undy.tdaid.data.model.playerIdForPdgaNumber
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaCourseMeta
@@ -251,7 +252,7 @@ class RealLiveRosterRepository(
                         players = players.map { r ->
                             val homeLocation = listOfNotNull(r.city, r.country).joinToString(", ").ifEmpty { null }
                             Player(
-                                id = "pdga-${r.pdgaNumber}",
+                                id = playerIdForPdgaNumber(r.pdgaNumber.toString()),
                                 name = "${r.firstName} ${r.lastName}".trim(),
                                 pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
                                 recentResult = "—",

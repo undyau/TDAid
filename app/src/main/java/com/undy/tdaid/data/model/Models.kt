@@ -48,6 +48,10 @@ data class Player(
         get() = name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase()
 }
 
+/** The [Player.id] a real PDGA-sourced starter gets — used anywhere a PDGA number needs to be
+ *  matched back to a player, such as bio-note lookups, without depending on a roster load. */
+fun playerIdForPdgaNumber(pdgaNumber: String) = "pdga-$pdgaNumber"
+
 data class TeeGroup(
     val time: String,
     val players: List<Player>,

@@ -1,5 +1,9 @@
 package com.undy.tdaid.ui.screens.datasources
 
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
@@ -45,6 +49,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
+import com.undy.tdaid.data.local.BioCsvParser
+import com.undy.tdaid.data.local.BioNotesRepository
+import com.undy.tdaid.data.model.playerIdForPdgaNumber
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.LiveRosterRepository
@@ -67,14 +74,17 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DataSourcesViewModel(
     private val settingsRepository: SettingsRepository,
     private val pdgaRepository: PdgaRepository,
     private val liveRosterRepository: LiveRosterRepository,
+    private val bioNotesRepository: BioNotesRepository,
 ) : ViewModel() {
     val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
     val lastLoadedAtMillis = liveRosterRepository.lastLoadedAtMillis
@@ -87,11 +97,44 @@ class DataSourcesViewModel(
         private set
     var pdgaLoginError by mutableStateOf<String?>(null)
         private set
+    var bioImportInProgress by mutableStateOf(false)
+        private set
+    var bioImportStatus by mutableStateOf<String?>(null)
+        private set
 
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
     fun setClearBioDataOnNewEvent(v: Boolean) = viewModelScope.launch { settingsRepository.setClearBioDataOnNewEvent(v) }
+
+    /** Reads a TD-picked CSV (PDGA number, additional bio text per row) and appends each row's
+     *  text onto that player's bio note, creating one if they don't have one yet. Matching is by
+     *  PDGA number alone, so this works whether or not the player is in the currently loaded
+     *  roster. */
+    fun importBioCsv(contentResolver: ContentResolver, uri: Uri) {
+        bioImportInProgress = true
+        bioImportStatus = null
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Couldn't open that file")
+                    BioCsvParser.parse(text)
+                }
+            }
+            result.onSuccess { rows ->
+                if (rows.isEmpty()) {
+                    bioImportStatus = "No valid rows found — expected \"pdga number,additional bio text\" per line"
+                } else {
+                    rows.forEach { row -> bioNotesRepository.appendBio(playerIdForPdgaNumber(row.pdgaNumber), row.additionalBio) }
+                    bioImportStatus = "Imported bio notes for ${rows.size} player${if (rows.size == 1) "" else "s"}"
+                }
+            }.onFailure { e ->
+                bioImportStatus = "Import failed: ${e.message ?: "unknown error"}"
+            }
+            bioImportInProgress = false
+        }
+    }
 
     /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
      *  there's nothing real to sync. */
@@ -128,12 +171,16 @@ fun DataSourcesScreen(onBack: () -> Unit) {
             ServiceLocator.settingsRepository,
             ServiceLocator.pdgaRepository,
             ServiceLocator.liveRosterRepository,
+            ServiceLocator.bioNotesRepository,
         )
     }
     val settings by vm.settings.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val bioCsvPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { vm.importBioCsv(context.contentResolver, it) }
+    }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -228,6 +275,20 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             settings.clearBioDataOnNewEvent,
                             { vm.setClearBioDataOnNewEvent(it) },
                         )
+                        Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlineButton(
+                                text = if (vm.bioImportInProgress) "Importing…" else "Import Bio CSV",
+                                onClick = { bioCsvPicker.launch("text/*") },
+                            )
+                            Text(
+                                "Two columns per row: PDGA number, additional bio text. Matches by PDGA number and appends to that player's existing bio note.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = InkMuted,
+                            )
+                            vm.bioImportStatus?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = ForestDark)
+                            }
+                        }
                     }
                 }
             }

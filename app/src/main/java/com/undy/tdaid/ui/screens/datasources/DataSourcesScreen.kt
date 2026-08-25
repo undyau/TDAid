@@ -105,7 +105,6 @@ class DataSourcesViewModel(
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
-    fun setClearBioDataOnNewEvent(v: Boolean) = viewModelScope.launch { settingsRepository.setClearBioDataOnNewEvent(v) }
 
     /** Reads a TD-picked CSV (PDGA number, additional bio text per row) and appends each row's
      *  text onto that player's bio note, creating one if they don't have one yet. Matching is by
@@ -268,12 +267,6 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             "Member-since date, recent results & auto-bio for every starter — loaded once per event (no PDGA login needed). Turn off for a faster, bare roster.",
                             settings.fetchPlayerProfiles,
                             { vm.setFetchPlayerProfiles(it) },
-                        )
-                        ToggleRow(
-                            "Clear bio notes for new events",
-                            "Wipes every TD-entered pronunciation, hometown & bio note when you pick a new tournament. Off by default so notes carry forward between events.",
-                            settings.clearBioDataOnNewEvent,
-                            { vm.setClearBioDataOnNewEvent(it) },
                         )
                         Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             OutlineButton(

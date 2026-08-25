@@ -37,13 +37,14 @@ object ServiceLocator {
         adgRepository = RealAdgRepository()
         val database = AppDatabase.get(context)
         val profileCacheRepository = RoomPlayerProfileCacheRepository(database.playerProfileCacheDao())
+        bioNotesRepository = RoomBioNotesRepository(database.bioNoteDao())
         liveRosterRepository = RealLiveRosterRepository(
             pdgaRepository,
             adgRepository,
             profileCacheRepository,
             settingsRepository,
+            bioNotesRepository,
             context.applicationContext,
         )
-        bioNotesRepository = RoomBioNotesRepository(database.bioNoteDao())
     }
 }

@@ -2,6 +2,7 @@ package com.undy.tdaid.data.repo
 
 import android.content.Context
 import android.os.PowerManager
+import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.PlayerProfileCacheRepository
 import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.PdgaProfile
@@ -132,6 +133,7 @@ class RealLiveRosterRepository(
     private val adgRepository: AdgRepository,
     private val profileCacheRepository: PlayerProfileCacheRepository,
     private val settingsRepository: SettingsRepository,
+    private val bioNotesRepository: BioNotesRepository,
     private val appContext: Context,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -182,6 +184,10 @@ class RealLiveRosterRepository(
         }
     }
 
+    /** Loads (or reloads) every real division for [tournamentId] — a brand-new tournament pick, a
+     *  manual "Sync Now"/"Retry", or Field Mode's own refresh all funnel through here, so this is
+     *  the one place that needs to honor [AppSettings.clearBioDataOnNewEvent]: wiping TD-entered
+     *  bio notes whenever this event's real data (re)loads, not just the first time. */
     override fun loadAllDivisions(tournamentId: String) {
         loadJob?.cancel()
         adgJob?.cancel()
@@ -189,6 +195,9 @@ class RealLiveRosterRepository(
         loadJob = scope.launch {
             _loading.value = true
             _error.value = null
+            if (settingsRepository.settings.first().clearBioDataOnNewEvent) {
+                bioNotesRepository.clearAll()
+            }
             _loadingStatus.value = "Finding real divisions…"
             pdgaRepository.fetchEventMeta(tournamentId)
                 .onSuccess { meta ->

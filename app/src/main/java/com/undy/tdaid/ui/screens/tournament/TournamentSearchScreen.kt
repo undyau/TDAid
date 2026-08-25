@@ -36,13 +36,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.collectAsState
 import com.undy.tdaid.data.ServiceLocator
-import com.undy.tdaid.data.local.BioNotesRepository
+import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.PdgaRepository
 import com.undy.tdaid.ui.components.PrimaryButton
+import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.PdgaLinkIcon
 import com.undy.tdaid.ui.pdgaEventPath
@@ -57,7 +59,8 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -86,9 +89,11 @@ class TournamentSearchViewModel(
     private val pdgaRepository: PdgaRepository,
     private val settingsRepository: SettingsRepository,
     private val liveRosterRepository: LiveRosterRepository,
-    private val bioNotesRepository: BioNotesRepository,
 ) : ViewModel() {
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
+    val settings = settingsRepository.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    fun setClearBioDataOnNewEvent(v: Boolean) = viewModelScope.launch { settingsRepository.setClearBioDataOnNewEvent(v) }
 
     var query by mutableStateOf("")
     var loading by mutableStateOf(false)
@@ -119,12 +124,11 @@ class TournamentSearchViewModel(
             val dates = formatDateRange(event.startDate, event.endDate)
             val location = listOfNotNull(event.city, event.stateProv ?: event.country).joinToString(", ").ifEmpty { null }
             settingsRepository.setSelectedTournament(event.tournamentName, dates, location, event.tournamentId)
-            if (settingsRepository.settings.first().clearBioDataOnNewEvent) {
-                bioNotesRepository.clearAll()
-            }
-            // Only clear here — Dashboard notices the cache is empty for this tournament and
-            // triggers the actual load itself, since it (unlike this screen) is still around to
-            // see it through, whether this is a fresh selection or a restart with one already set.
+            // Only clear the roster cache here — Dashboard notices it's empty for this tournament
+            // and triggers the actual load itself, since it (unlike this screen) is still around
+            // to see it through. That load is also where bio notes get cleared, if the TD has
+            // that toggled on, since it's the one place a reload of the same event goes through
+            // too (Sync Now, Retry, Field Mode's refresh) — not just a fresh tournament pick.
             liveRosterRepository.clear()
             onDone()
         }
@@ -139,9 +143,9 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
             ServiceLocator.pdgaRepository,
             ServiceLocator.settingsRepository,
             ServiceLocator.liveRosterRepository,
-            ServiceLocator.bioNotesRepository,
         )
     }
+    val settings by vm.settings.collectAsState()
 
     Column(
         Modifier.fillMaxSize().background(BgPaper).windowInsetsPadding(WindowInsets.systemBars),
@@ -164,6 +168,17 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            item {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 14.dp)) {
+                    ToggleRow(
+                        "Clear bio notes on load",
+                        "Wipes every TD-entered pronunciation, hometown & bio note whenever this event's data (re)loads — a fresh pick, Sync Now, or Retry. Off by default so notes carry forward.",
+                        settings.clearBioDataOnNewEvent,
+                        { vm.setClearBioDataOnNewEvent(it) },
+                    )
+                }
+            }
+
             if (!vm.pdgaLoggedIn) {
                 item {
                     Column(

@@ -332,9 +332,18 @@ class RealLiveRosterRepository(
         prefetchJob = scope.launch {
             data class Target(val teeTime: String, val division: String, val player: Player)
 
+            // Real chronological order, not string order — a plain string compare sorts "10:00 AM"
+            // before "9:00 AM", which silently starved whichever division's tee times happened to
+            // sort late: this queue is long and throttled, so a division stuck at the tail could
+            // go the entire load without its players' details ever being fetched.
             val allTargets = loaded.entries
                 .flatMap { (division, roster) -> roster.groups.flatMap { g -> g.players.map { Target(g.time, division, it) } } }
-                .sortedWith(compareBy({ it.teeTime.isEmpty() }, { it.teeTime }))
+                .sortedWith(
+                    compareBy(
+                        { TeeAlarmScheduler.parseTodayMillis(it.teeTime) == null },
+                        { TeeAlarmScheduler.parseTodayMillis(it.teeTime) ?: Long.MAX_VALUE },
+                    ),
+                )
             if (allTargets.isEmpty()) return@launch
 
             val cached = profileCacheRepository.get(tournamentId)

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.undy.tdaid.data.ServiceLocator
+import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.repo.LiveRosterRepository
@@ -56,6 +57,7 @@ import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
 import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -84,6 +86,7 @@ class TournamentSearchViewModel(
     private val pdgaRepository: PdgaRepository,
     private val settingsRepository: SettingsRepository,
     private val liveRosterRepository: LiveRosterRepository,
+    private val bioNotesRepository: BioNotesRepository,
 ) : ViewModel() {
     val pdgaLoggedIn: Boolean get() = pdgaRepository.isLoggedIn
 
@@ -116,6 +119,9 @@ class TournamentSearchViewModel(
             val dates = formatDateRange(event.startDate, event.endDate)
             val location = listOfNotNull(event.city, event.stateProv ?: event.country).joinToString(", ").ifEmpty { null }
             settingsRepository.setSelectedTournament(event.tournamentName, dates, location, event.tournamentId)
+            if (settingsRepository.settings.first().clearBioDataOnNewEvent) {
+                bioNotesRepository.clearAll()
+            }
             // Only clear here — Dashboard notices the cache is empty for this tournament and
             // triggers the actual load itself, since it (unlike this screen) is still around to
             // see it through, whether this is a fresh selection or a restart with one already set.
@@ -129,7 +135,12 @@ class TournamentSearchViewModel(
 @Composable
 fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
     val vm = rememberViewModel {
-        TournamentSearchViewModel(ServiceLocator.pdgaRepository, ServiceLocator.settingsRepository, ServiceLocator.liveRosterRepository)
+        TournamentSearchViewModel(
+            ServiceLocator.pdgaRepository,
+            ServiceLocator.settingsRepository,
+            ServiceLocator.liveRosterRepository,
+            ServiceLocator.bioNotesRepository,
+        )
     }
 
     Column(

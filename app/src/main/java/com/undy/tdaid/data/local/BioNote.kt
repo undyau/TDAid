@@ -46,6 +46,9 @@ interface BioNoteDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: BioNoteEntity)
+
+    @Query("DELETE FROM bio_notes")
+    suspend fun clearAll()
 }
 
 @Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 3, exportSchema = true)
@@ -73,6 +76,7 @@ abstract class AppDatabase : RoomDatabase() {
 interface BioNotesRepository {
     fun observeNote(playerId: String): Flow<BioNote?>
     suspend fun saveNote(note: BioNote)
+    suspend fun clearAll()
 }
 
 class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
@@ -81,5 +85,9 @@ class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
 
     override suspend fun saveNote(note: BioNote) {
         dao.upsert(note.toEntity())
+    }
+
+    override suspend fun clearAll() {
+        dao.clearAll()
     }
 }

@@ -91,6 +91,7 @@ class DataSourcesViewModel(
     fun setAdgConnected(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgConnected(v) }
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
+    fun setClearBioDataOnNewEvent(v: Boolean) = viewModelScope.launch { settingsRepository.setClearBioDataOnNewEvent(v) }
 
     /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
      *  there's nothing real to sync. */
@@ -220,6 +221,12 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                             "Member-since date, recent results & auto-bio for every starter — loaded once per event (no PDGA login needed). Turn off for a faster, bare roster.",
                             settings.fetchPlayerProfiles,
                             { vm.setFetchPlayerProfiles(it) },
+                        )
+                        ToggleRow(
+                            "Clear bio notes for new events",
+                            "Wipes every TD-entered pronunciation, hometown & bio note when you pick a new tournament. Off by default so notes carry forward between events.",
+                            settings.clearBioDataOnNewEvent,
+                            { vm.setClearBioDataOnNewEvent(it) },
                         )
                     }
                 }

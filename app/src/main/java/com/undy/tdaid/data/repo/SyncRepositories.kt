@@ -2,6 +2,7 @@ package com.undy.tdaid.data.repo
 
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.AdgLeaderboardRow
+import com.undy.tdaid.data.remote.AdgMember
 import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
 import com.undy.tdaid.data.remote.PdgaEventMeta
@@ -81,8 +82,12 @@ interface AdgRepository {
     /** The whole leaderboard in one request — used to enrich a real roster in bulk instead of
      *  looking up every player one at a time. */
     suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>>
+    /** The full real member roster — a fallback lookup (by PDGA number) for a player whose real
+     *  name doesn't match anyone on the leaderboard, e.g. a nickname or married name. */
+    suspend fun fetchMemberList(): Result<List<AdgMember>>
 }
 
 class RealAdgRepository(private val scraper: AdgScraper = AdgScraper()) : AdgRepository {
     override suspend fun fetchLeaderboard(): Result<List<AdgLeaderboardRow>> = runCatching { scraper.fetchLeaderboard() }
+    override suspend fun fetchMemberList(): Result<List<AdgMember>> = runCatching { scraper.fetchMemberList() }
 }

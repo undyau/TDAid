@@ -6,6 +6,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 private const val LEADERBOARD_URL = "https://www.australiandiscgolf.com/leaderboard/"
+private const val MEMBER_LIST_URL = "https://www.australiandiscgolf.com/memberlist/"
 private const val USER_AGENT = "Mozilla/5.0 (Android) TDAid/1.0"
 
 data class AdgLeaderboardRow(
@@ -15,6 +16,16 @@ data class AdgLeaderboardRow(
     val division: String,
     val points: Int,
     val eventsPlayed: Int,
+)
+
+/** One real ADG member, as published on the public member list — the only place that ties a real
+ *  PDGA number to a real ADG name, for a player whose leaderboard name doesn't match theirs
+ *  (nickname, married name, etc.). [pdgaNumber] is null for a member who hasn't linked one. */
+data class AdgMember(
+    val adgNumber: String,
+    val firstName: String,
+    val lastName: String,
+    val pdgaNumber: String?,
 )
 
 /**
@@ -34,6 +45,20 @@ class AdgScraper {
         document.select("tr.adg-leaderboard-result-row").mapNotNull { row -> row.toLeaderboardRow() }
     }
 
+    /** The full real ADG member roster, scraped the same way as [fetchLeaderboard] — used only as
+     *  a fallback lookup (by PDGA number) for a player who has no leaderboard name match, since
+     *  it's a much bigger page than the leaderboard. */
+    suspend fun fetchMemberList(): List<AdgMember> = withContext(Dispatchers.IO) {
+        val document = Jsoup.connect(MEMBER_LIST_URL)
+            .userAgent(USER_AGENT)
+            .timeout(15_000)
+            .get()
+
+        document.select("table.adg-member-list tr")
+            .filterNot { it.id() == "header_row" }
+            .mapNotNull { row -> row.toMember() }
+    }
+
     private fun Element.toLeaderboardRow(): AdgLeaderboardRow? {
         fun cell(label: String): String? = selectFirst("td[data-label=$label]")?.text()?.trim()
 
@@ -45,5 +70,16 @@ class AdgScraper {
         val events = selectFirst("span.adg-event-count")?.text()?.trim()?.toIntOrNull() ?: 0
 
         return AdgLeaderboardRow(rank, name, adgNumber, division, points, events)
+    }
+
+    private fun Element.toMember(): AdgMember? {
+        fun cell(label: String): Element? = selectFirst("td[data-label=$label]")
+
+        val adgNumber = cell("ADG Number")?.text()?.trim() ?: return null
+        val firstName = cell("Firstname")?.text()?.trim() ?: return null
+        val lastName = cell("Lastname")?.text()?.trim() ?: return null
+        val pdgaNumber = cell("PDGA")?.selectFirst("a")?.text()?.trim()?.ifEmpty { null }
+
+        return AdgMember(adgNumber, firstName, lastName, pdgaNumber)
     }
 }

@@ -10,6 +10,7 @@ import com.undy.tdaid.data.model.TeeGroup
 import com.undy.tdaid.data.model.playerIdForPdgaNumber
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.prefs.SettingsRepository
+import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.PdgaCourseMeta
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.remote.PdgaLiveResult
@@ -298,24 +299,40 @@ class RealLiveRosterRepository(
     }
 
     /** One request for the whole ADG Tour leaderboard, matched to real starters by name — cheap
-     *  enough to just do in bulk, unlike the PDGA per-player profile fetch below. */
+     *  enough to just do in bulk, unlike the PDGA per-player profile fetch below. A starter whose
+     *  real name doesn't match anyone on the leaderboard (nickname, married name, etc.) falls back
+     *  to the real ADG member list, matched by PDGA number instead, to find their real ADG name —
+     *  that list is much bigger than the leaderboard, so it's only fetched when a fallback is
+     *  actually needed, not on every sync. */
     private fun enrichWithAdg() {
         adgJob = scope.launch {
-            adgRepository.fetchLeaderboard().onSuccess { rows ->
-                if (rows.isEmpty()) return@onSuccess
-                _rosters.update { current ->
-                    current.mapValues { (_, roster) ->
-                        roster.copy(
-                            groups = roster.groups.map { group ->
-                                group.copy(
-                                    players = group.players.map { p ->
-                                        val match = rows.firstOrNull { it.name.equals(p.name, ignoreCase = true) }
-                                        if (match == null) p else p.copy(adg = AdgRanking(match.rank, match.division, match.points))
-                                    },
-                                )
-                            },
-                        )
-                    }
+            val rows = adgRepository.fetchLeaderboard().getOrNull()
+            if (rows.isNullOrEmpty()) return@launch
+
+            fun nameMatch(name: String) = rows.firstOrNull { it.name.equals(name, ignoreCase = true) }
+
+            val allPlayers = _rosters.value.values.flatMap { roster -> roster.groups.flatMap { it.players } }
+            val needsMemberLookup = allPlayers.any { nameMatch(it.name) == null }
+            val members = if (needsMemberLookup) adgRepository.fetchMemberList().getOrNull() else null
+
+            fun matchFor(p: Player): AdgLeaderboardRow? {
+                nameMatch(p.name)?.let { return it }
+                val member = members?.firstOrNull { it.pdgaNumber == p.pdga.pdgaNumber } ?: return null
+                return nameMatch("${member.firstName} ${member.lastName}".trim())
+            }
+
+            _rosters.update { current ->
+                current.mapValues { (_, roster) ->
+                    roster.copy(
+                        groups = roster.groups.map { group ->
+                            group.copy(
+                                players = group.players.map { p ->
+                                    val match = matchFor(p)
+                                    if (match == null) p else p.copy(adg = AdgRanking(match.rank, match.division, match.points))
+                                },
+                            )
+                        },
+                    )
                 }
             }
         }

@@ -106,10 +106,11 @@ class DataSourcesViewModel(
     fun setAdgShowRank(v: Boolean) = viewModelScope.launch { settingsRepository.setAdgShowRank(v) }
     fun setFetchPlayerProfiles(v: Boolean) = viewModelScope.launch { settingsRepository.setFetchPlayerProfiles(v) }
 
-    /** Reads a TD-picked CSV (PDGA number, additional bio text per row) and appends each row's
-     *  text onto that player's bio note, creating one if they don't have one yet. Matching is by
-     *  PDGA number alone, so this works whether or not the player is in the currently loaded
-     *  roster. */
+    /** Reads a TD-picked CSV (PDGA number, sponsor, walk-on song per row) and sets each row's
+     *  sponsor/walk-on song on that player's bio note, creating one if they don't have one yet.
+     *  Kept in its own columns, separate from the TD's manually-typed bio — see
+     *  [BioNotesRepository.importSponsorInfo]. Matching is by PDGA number alone, so this works
+     *  whether or not the player is in the currently loaded roster. */
     fun importBioCsv(contentResolver: ContentResolver, uri: Uri) {
         bioImportInProgress = true
         bioImportStatus = null
@@ -123,10 +124,10 @@ class DataSourcesViewModel(
             }
             result.onSuccess { rows ->
                 if (rows.isEmpty()) {
-                    bioImportStatus = "No valid rows found — expected \"pdga number,additional bio text\" per line"
+                    bioImportStatus = "No valid rows found — expected \"pdga number,sponsor,walk-on song\" per line"
                 } else {
-                    rows.forEach { row -> bioNotesRepository.appendBio(playerIdForPdgaNumber(row.pdgaNumber), row.additionalBio) }
-                    bioImportStatus = "Imported bio notes for ${rows.size} player${if (rows.size == 1) "" else "s"}"
+                    rows.forEach { row -> bioNotesRepository.importSponsorInfo(playerIdForPdgaNumber(row.pdgaNumber), row.sponsor, row.walkOnSong) }
+                    bioImportStatus = "Imported sponsor/walk-on song for ${rows.size} player${if (rows.size == 1) "" else "s"}"
                 }
             }.onFailure { e ->
                 bioImportStatus = "Import failed: ${e.message ?: "unknown error"}"
@@ -274,7 +275,7 @@ fun DataSourcesScreen(onBack: () -> Unit) {
                                 onClick = { bioCsvPicker.launch("text/*") },
                             )
                             Text(
-                                "Two columns per row: PDGA number, additional bio text. Matches by PDGA number and appends to that player's existing bio note.",
+                                "Three columns per row: PDGA number, sponsor, walk-on song. Either sponsor or walk-on song may be blank. Matches by PDGA number — kept separate from any bio a TD types by hand.",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                 color = InkMuted,
                             )

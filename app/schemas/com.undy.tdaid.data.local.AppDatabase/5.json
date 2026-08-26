@@ -1,0 +1,117 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 5,
+    "identityHash": "34d66dacb190a568f244980bbdcfa3b3",
+    "entities": [
+      {
+        "tableName": "bio_notes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`playerId` TEXT NOT NULL, `pronunciation` TEXT NOT NULL, `bio` TEXT NOT NULL, `sponsor` TEXT NOT NULL, `walkOnSong` TEXT NOT NULL, `savedToLibrary` INTEGER NOT NULL, `sourceRoundLabel` TEXT, `updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`playerId`))",
+        "fields": [
+          {
+            "fieldPath": "playerId",
+            "columnName": "playerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pronunciation",
+            "columnName": "pronunciation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bio",
+            "columnName": "bio",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sponsor",
+            "columnName": "sponsor",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "walkOnSong",
+            "columnName": "walkOnSong",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "savedToLibrary",
+            "columnName": "savedToLibrary",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceRoundLabel",
+            "columnName": "sourceRoundLabel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAtMillis",
+            "columnName": "updatedAtMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "playerId"
+          ]
+        }
+      },
+      {
+        "tableName": "player_profile_cache",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tournamentId` TEXT NOT NULL, `pdgaNumber` TEXT NOT NULL, `memberSince` TEXT, `recentResult` TEXT, `lastWin` TEXT, `bestResultThisYear` TEXT, PRIMARY KEY(`tournamentId`, `pdgaNumber`))",
+        "fields": [
+          {
+            "fieldPath": "tournamentId",
+            "columnName": "tournamentId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pdgaNumber",
+            "columnName": "pdgaNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "memberSince",
+            "columnName": "memberSince",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recentResult",
+            "columnName": "recentResult",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastWin",
+            "columnName": "lastWin",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bestResultThisYear",
+            "columnName": "bestResultThisYear",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "tournamentId",
+            "pdgaNumber"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '34d66dacb190a568f244980bbdcfa3b3')"
+    ]
+  }
+}

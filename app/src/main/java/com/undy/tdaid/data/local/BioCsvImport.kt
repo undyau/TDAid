@@ -1,9 +1,11 @@
 package com.undy.tdaid.data.local
 
-/** One row of a TD-supplied bio-import CSV: pdga_number,additional_bio_text. */
-data class BioImportRow(val pdgaNumber: String, val additionalBio: String)
+/** One row of a TD-supplied CSV: pdga_number,sponsor,walk_on_song. Either sponsor or walkOnSong
+ *  may be blank — a row just needs a valid PDGA number and at least one of the two to be worth
+ *  importing. */
+data class BioImportRow(val pdgaNumber: String, val sponsor: String, val walkOnSong: String)
 
-/** Parses a two-column CSV of PDGA number + free-text bio addition. No header row is expected,
+/** Parses a three-column CSV of PDGA number + sponsor + walk-on song. No header row is expected,
  *  but if one is present it's skipped harmlessly — a first column that isn't all digits can't be
  *  a real PDGA number, so it's treated as a header/junk line rather than an error. */
 object BioCsvParser {
@@ -15,14 +17,16 @@ object BioCsvParser {
         if (line.isBlank()) return null
         val fields = splitCsvLine(line)
         val pdgaNumber = fields.getOrNull(0)?.trim()
-        val bio = fields.getOrNull(1)?.trim()
-        if (pdgaNumber.isNullOrEmpty() || bio.isNullOrEmpty()) return null
+        val sponsor = fields.getOrNull(1)?.trim().orEmpty()
+        val walkOnSong = fields.getOrNull(2)?.trim().orEmpty()
+        if (pdgaNumber.isNullOrEmpty()) return null
         if (!pdgaNumber.all { it.isDigit() }) return null
-        return BioImportRow(pdgaNumber, bio)
+        if (sponsor.isEmpty() && walkOnSong.isEmpty()) return null
+        return BioImportRow(pdgaNumber, sponsor, walkOnSong)
     }
 
     /** Minimal RFC-4180 split: handles fields quoted with "..." (commas inside stay literal, ""
-     *  is an escaped quote) since free-text bio entries commonly contain commas. */
+     *  is an escaped quote) since a walk-on song title commonly contains commas. */
     private fun splitCsvLine(line: String): List<String> {
         val fields = mutableListOf<String>()
         val current = StringBuilder()

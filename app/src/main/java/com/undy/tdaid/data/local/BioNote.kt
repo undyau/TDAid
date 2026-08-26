@@ -17,11 +17,17 @@ import kotlinx.coroutines.flow.map
 
 /** A TD's manually-entered notes about a player, persisted so they carry forward to future rounds.
  *  No hometown field — that's already real PDGA data ([com.undy.tdaid.data.model.PdgaProfile.homeLocation]),
- *  not something a TD needs to re-enter. */
+ *  not something a TD needs to re-enter.
+ *
+ *  [sponsor] and [walkOnSong] are set only by the CSV importer, never by the manual bio editor —
+ *  kept in their own columns rather than folded into [bio] so a bulk CSV re-import can't clobber
+ *  (or get confused with) whatever a TD has typed by hand. */
 data class BioNote(
     val playerId: String,
     val pronunciation: String,
     val bio: String,
+    val sponsor: String,
+    val walkOnSong: String,
     val savedToLibrary: Boolean,
     val sourceRoundLabel: String?,
     val updatedAtMillis: Long,
@@ -32,13 +38,15 @@ data class BioNoteEntity(
     @PrimaryKey val playerId: String,
     val pronunciation: String,
     val bio: String,
+    val sponsor: String,
+    val walkOnSong: String,
     val savedToLibrary: Boolean,
     val sourceRoundLabel: String?,
     val updatedAtMillis: Long,
 )
 
-fun BioNoteEntity.toDomain() = BioNote(playerId, pronunciation, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
-fun BioNote.toEntity() = BioNoteEntity(playerId, pronunciation, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
+fun BioNoteEntity.toDomain() = BioNote(playerId, pronunciation, bio, sponsor, walkOnSong, savedToLibrary, sourceRoundLabel, updatedAtMillis)
+fun BioNote.toEntity() = BioNoteEntity(playerId, pronunciation, bio, sponsor, walkOnSong, savedToLibrary, sourceRoundLabel, updatedAtMillis)
 
 @Dao
 interface BioNoteDao {
@@ -52,7 +60,7 @@ interface BioNoteDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 4, exportSchema = true)
+@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 5, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
     abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
@@ -77,10 +85,12 @@ abstract class AppDatabase : RoomDatabase() {
 interface BioNotesRepository {
     fun observeNote(playerId: String): Flow<BioNote?>
     suspend fun saveNote(note: BioNote)
-    /** Folds imported text into [playerId]'s bio note, creating one if none exists yet. Existing
-     *  bio text is kept, with the new text appended — this is meant for bulk CSV import, where
-     *  overwriting a TD's existing notes outright would be surprising. */
-    suspend fun appendBio(playerId: String, additionalText: String)
+    /** Sets [playerId]'s CSV-sourced sponsor/walk-on song, creating a bio note if none exists yet.
+     *  A blank value here means the CSV had nothing for that column on this row, so it leaves
+     *  whatever was already stored alone rather than clobbering it — only a non-blank cell
+     *  overwrites. Never touches [BioNote.bio]/[BioNote.pronunciation], which are the TD's own,
+     *  manually-entered fields and CSV import has no business changing them. */
+    suspend fun importSponsorInfo(playerId: String, sponsor: String, walkOnSong: String)
     suspend fun clearAll()
 }
 
@@ -92,15 +102,18 @@ class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
         dao.upsert(note.toEntity())
     }
 
-    override suspend fun appendBio(playerId: String, additionalText: String) {
+    override suspend fun importSponsorInfo(playerId: String, sponsor: String, walkOnSong: String) {
         val existing = dao.observe(playerId).first()?.toDomain()
         val merged = existing?.copy(
-            bio = if (existing.bio.isBlank()) additionalText else "${existing.bio}\n\n$additionalText",
+            sponsor = sponsor.ifBlank { existing.sponsor },
+            walkOnSong = walkOnSong.ifBlank { existing.walkOnSong },
             updatedAtMillis = System.currentTimeMillis(),
         ) ?: BioNote(
             playerId = playerId,
             pronunciation = "",
-            bio = additionalText,
+            bio = "",
+            sponsor = sponsor,
+            walkOnSong = walkOnSong,
             savedToLibrary = true,
             sourceRoundLabel = null,
             updatedAtMillis = System.currentTimeMillis(),

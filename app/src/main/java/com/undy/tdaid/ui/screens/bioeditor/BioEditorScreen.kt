@@ -83,6 +83,9 @@ class BioEditorViewModel(
 
     var pronunciation by mutableStateOf("")
     var bioText by mutableStateOf(player?.bio ?: "")
+    // CSV-imported, kept separate from bioText above — see BioNote's kdoc.
+    var sponsor by mutableStateOf("")
+    var walkOnSong by mutableStateOf("")
     var saveToLibrary by mutableStateOf(true)
     var sourceRoundLabel by mutableStateOf<String?>(null)
     var justSaved by mutableStateOf(false)
@@ -94,6 +97,8 @@ class BioEditorViewModel(
             if (existing != null) {
                 pronunciation = existing.pronunciation
                 bioText = existing.bio
+                sponsor = existing.sponsor
+                walkOnSong = existing.walkOnSong
                 saveToLibrary = existing.savedToLibrary
                 sourceRoundLabel = existing.sourceRoundLabel
             }
@@ -107,6 +112,8 @@ class BioEditorViewModel(
                     playerId = playerId,
                     pronunciation = pronunciation,
                     bio = bioText,
+                    sponsor = sponsor,
+                    walkOnSong = walkOnSong,
                     savedToLibrary = saveToLibrary,
                     sourceRoundLabel = sourceRoundLabel,
                     updatedAtMillis = System.currentTimeMillis(),
@@ -226,6 +233,21 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
             }
             item {
                 LabeledField(label = "Announcer bio & notes", value = vm.bioText, onChange = { vm.bioText = it }, minLines = 4)
+            }
+
+            item {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(14.dp)) {
+                    Text(
+                        "From CSV import",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = InkMuted,
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LabeledField(label = "Sponsor", value = vm.sponsor, onChange = { vm.sponsor = it })
+                        LabeledField(label = "Walk-on song", value = vm.walkOnSong, onChange = { vm.walkOnSong = it })
+                    }
+                }
             }
 
             item {

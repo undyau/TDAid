@@ -86,6 +86,10 @@ data class Division(
      *  roster has loaded. Shown instead of PDGA's full division name (e.g. "Mixed Pro Open"),
      *  since the code ("MPO") already says which division this is. */
     val courseName: String? = null,
+    /** Whether this division's own roster has finished loading — distinguishes "still loading,
+     *  course not known yet" (false) from "loaded, but PDGA has no course for it" (true), so the
+     *  UI only shows a loading placeholder in the former case. */
+    val rosterLoaded: Boolean = false,
 )
 
 enum class RowStatus { DONE, CURRENT, UPCOMING }

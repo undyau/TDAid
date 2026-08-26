@@ -91,8 +91,9 @@ class DashboardViewModel(
      *  from its own roster, so it's null until that division specifically has finished loading. */
     fun divisionsFor(eventDivisions: List<PdgaDivisionMeta>, rosters: Map<String, LiveRoster>): List<Division> =
         eventDivisions.map { d ->
-            val courseName = rosters[d.code]?.courses?.distinctBy { it.courseId }?.joinToString(" · ") { it.name }
-            Division(d.code, starterCount = d.playerCount, courseName = courseName?.ifEmpty { null })
+            val roster = rosters[d.code]
+            val courseName = roster?.courses?.distinctBy { it.courseId }?.joinToString(" · ") { it.name }
+            Division(d.code, starterCount = d.playerCount, courseName = courseName?.ifEmpty { null }, rosterLoaded = roster != null)
         }
 
     var selectedDivision by mutableStateOf("")
@@ -367,11 +368,14 @@ private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Un
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                division.courseName ?: "Loading course…",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp),
-                color = Ink,
-            )
+            val courseLabel = division.courseName ?: "Loading course…".takeIf { !division.rosterLoaded }
+            if (courseLabel != null) {
+                Text(
+                    courseLabel,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp),
+                    color = Ink,
+                )
+            }
             Text(
                 "${division.starterCount} starter${if (division.starterCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),

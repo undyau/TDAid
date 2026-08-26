@@ -15,11 +15,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-/** A TD's manually-entered notes about a player, persisted so they carry forward to future rounds. */
+/** A TD's manually-entered notes about a player, persisted so they carry forward to future rounds.
+ *  No hometown field — that's already real PDGA data ([com.undy.tdaid.data.model.PdgaProfile.homeLocation]),
+ *  not something a TD needs to re-enter. */
 data class BioNote(
     val playerId: String,
     val pronunciation: String,
-    val hometown: String,
     val bio: String,
     val savedToLibrary: Boolean,
     val sourceRoundLabel: String?,
@@ -30,15 +31,14 @@ data class BioNote(
 data class BioNoteEntity(
     @PrimaryKey val playerId: String,
     val pronunciation: String,
-    val hometown: String,
     val bio: String,
     val savedToLibrary: Boolean,
     val sourceRoundLabel: String?,
     val updatedAtMillis: Long,
 )
 
-fun BioNoteEntity.toDomain() = BioNote(playerId, pronunciation, hometown, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
-fun BioNote.toEntity() = BioNoteEntity(playerId, pronunciation, hometown, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
+fun BioNoteEntity.toDomain() = BioNote(playerId, pronunciation, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
+fun BioNote.toEntity() = BioNoteEntity(playerId, pronunciation, bio, savedToLibrary, sourceRoundLabel, updatedAtMillis)
 
 @Dao
 interface BioNoteDao {
@@ -52,7 +52,7 @@ interface BioNoteDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 3, exportSchema = true)
+@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 4, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
     abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
@@ -100,7 +100,6 @@ class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
         ) ?: BioNote(
             playerId = playerId,
             pronunciation = "",
-            hometown = "",
             bio = additionalText,
             savedToLibrary = true,
             sourceRoundLabel = null,

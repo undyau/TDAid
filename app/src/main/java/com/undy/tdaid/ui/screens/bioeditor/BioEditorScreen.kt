@@ -82,7 +82,6 @@ class BioEditorViewModel(
         .find { it.id == playerId }
 
     var pronunciation by mutableStateOf("")
-    var hometown by mutableStateOf("")
     var bioText by mutableStateOf(player?.bio ?: "")
     var saveToLibrary by mutableStateOf(true)
     var sourceRoundLabel by mutableStateOf<String?>(null)
@@ -94,7 +93,6 @@ class BioEditorViewModel(
             val existing = bioNotesRepository.observeNote(playerId).first()
             if (existing != null) {
                 pronunciation = existing.pronunciation
-                hometown = existing.hometown
                 bioText = existing.bio
                 saveToLibrary = existing.savedToLibrary
                 sourceRoundLabel = existing.sourceRoundLabel
@@ -108,7 +106,6 @@ class BioEditorViewModel(
                 BioNote(
                     playerId = playerId,
                     pronunciation = pronunciation,
-                    hometown = hometown,
                     bio = bioText,
                     savedToLibrary = saveToLibrary,
                     sourceRoundLabel = sourceRoundLabel,
@@ -226,9 +223,6 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
 
             item {
                 LabeledField(label = "Name pronunciation", value = vm.pronunciation, onChange = { vm.pronunciation = it })
-            }
-            item {
-                LabeledField(label = "Hometown", value = vm.hometown, onChange = { vm.hometown = it })
             }
             item {
                 LabeledField(label = "Announcer bio & notes", value = vm.bioText, onChange = { vm.bioText = it }, minLines = 4)

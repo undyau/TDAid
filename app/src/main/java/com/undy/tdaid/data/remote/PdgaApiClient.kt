@@ -236,7 +236,9 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
         (if (layoutsJson == null) emptyList() else (0 until layoutsJson.length()).mapNotNull { i ->
             val l = layoutsJson.getJSONObject(i)
             val courseId = if (l.has("CourseID") && !l.isNull("CourseID")) l.optInt("CourseID") else null
-            val name = l.optString("CourseName").trim()
+            // optString() stringifies a JSON null value to the literal text "null" instead of
+            // treating it as absent — has to be checked explicitly, same as CourseID above.
+            val name = if (l.has("CourseName") && !l.isNull("CourseName")) l.optString("CourseName").trim() else ""
             if (courseId == null || name.isEmpty()) null else PdgaCourseMeta(courseId, name)
         }).distinctBy { it.courseId }
 }

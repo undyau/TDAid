@@ -48,6 +48,7 @@ import com.undy.tdaid.data.model.Division
 import com.undy.tdaid.data.prefs.AppSettings
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
+import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
@@ -77,6 +78,7 @@ class DashboardViewModel(
 ) : ViewModel() {
     val eventDivisions = liveRosterRepository.eventDivisions
     val eventCourses = liveRosterRepository.eventCourses
+    val rosters = liveRosterRepository.rosters
     val liveLoading = liveRosterRepository.loading
     val liveLoadingStatus = liveRosterRepository.loadingStatus
     val profilePrefetchStatus = liveRosterRepository.profilePrefetchStatus
@@ -85,9 +87,13 @@ class DashboardViewModel(
     val liveError = liveRosterRepository.error
 
     /** Real divisions (with real player counts) once [loadAllDivisions][LiveRosterRepository.loadAllDivisions]
-     *  has found them for the selected event — empty until then. */
-    fun divisionsFor(eventDivisions: List<PdgaDivisionMeta>): List<Division> =
-        eventDivisions.map { Division(it.code, it.name, starterCount = it.playerCount) }
+     *  has found them for the selected event — empty until then. Each division's course name comes
+     *  from its own roster, so it's null until that division specifically has finished loading. */
+    fun divisionsFor(eventDivisions: List<PdgaDivisionMeta>, rosters: Map<String, LiveRoster>): List<Division> =
+        eventDivisions.map { d ->
+            val courseName = rosters[d.code]?.courses?.distinctBy { it.courseId }?.joinToString(" · ") { it.name }
+            Division(d.code, starterCount = d.playerCount, courseName = courseName?.ifEmpty { null })
+        }
 
     var selectedDivision by mutableStateOf("")
         private set
@@ -127,13 +133,14 @@ fun RoundDashboardScreen(
     val settings by vm.settings.collectAsState()
     val eventDivisions by vm.eventDivisions.collectAsState()
     val eventCourses by vm.eventCourses.collectAsState()
+    val rosters by vm.rosters.collectAsState()
     val liveLoading by vm.liveLoading.collectAsState()
     val liveLoadingStatus by vm.liveLoadingStatus.collectAsState()
     val profilePrefetchStatus by vm.profilePrefetchStatus.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     val loadedTournamentId by vm.loadedTournamentId.collectAsState()
     val liveError by vm.liveError.collectAsState()
-    val divisions = vm.divisionsFor(eventDivisions)
+    val divisions = vm.divisionsFor(eventDivisions, rosters)
     var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -360,10 +367,14 @@ private fun DivisionRow(division: Division, selected: Boolean, onClick: () -> Un
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(division.name, style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp), color = Ink)
+            Text(
+                division.courseName ?: "Loading course…",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.5.sp),
+                color = Ink,
+            )
             Text(
                 "${division.starterCount} starter${if (division.starterCount == 1) "" else "s"}",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
                 color = InkMuted,
             )
         }

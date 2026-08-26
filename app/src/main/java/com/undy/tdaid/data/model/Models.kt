@@ -81,8 +81,11 @@ data class TeeGroup(
 
 data class Division(
     val code: String,
-    val name: String,
     val starterCount: Int,
+    /** The course/layout this division is actually playing — null until that division's own
+     *  roster has loaded. Shown instead of PDGA's full division name (e.g. "Mixed Pro Open"),
+     *  since the code ("MPO") already says which division this is. */
+    val courseName: String? = null,
 )
 
 enum class RowStatus { DONE, CURRENT, UPCOMING }

@@ -9,8 +9,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,11 +53,19 @@ fun PdgaAttribution(modifier: Modifier = Modifier, color: Color = InkMuted) {
  *  own primary tap action (selecting a row, expanding it, opening a bio). A name-level nested
  *  clickable consumes taps within its own bounds, which silently breaks the row's primary action
  *  for anyone who naturally taps the (usually large, prominent) name itself — this icon gives the
- *  PDGA link its own small, deliberate hit target instead of stealing the name's. */
+ *  PDGA link its own small, deliberate hit target instead of stealing the name's.
+ *
+ *  [IconButton] normally pads its hit-test area out to Material's 48dp accessibility minimum,
+ *  which — on an icon this small, sitting right next to the row's own tap target — silently
+ *  swallows nearby taps meant for the row (e.g. picking an event from a search result) rather than
+ *  the link. Pinning [LocalMinimumInteractiveComponentSize] down to the icon's own visual size
+ *  confines the hit target to just the icon, so it no longer competes with the row around it. */
 @Composable
 fun PdgaLinkIcon(url: String, tint: Color = InkMuted, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    IconButton(onClick = { openPdgaUrl(context, url) }, modifier = modifier.size(28.dp)) {
-        Icon(Icons.Filled.OpenInNew, contentDescription = "View on PDGA", tint = tint, modifier = Modifier.size(15.dp))
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 28.dp) {
+        IconButton(onClick = { openPdgaUrl(context, url) }, modifier = modifier.size(28.dp)) {
+            Icon(Icons.Filled.OpenInNew, contentDescription = "View on PDGA", tint = tint, modifier = Modifier.size(15.dp))
+        }
     }
 }

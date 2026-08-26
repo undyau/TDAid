@@ -219,7 +219,7 @@ fun TeeTimeAlertScreen() {
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp, textDecoration = TextDecoration.Underline),
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
                         .background(Color.White.copy(alpha = 0.08f))
-                        .clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) }
+                        .clickable(enabled = player.pdga.hasPdgaNumber) { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 )
             }

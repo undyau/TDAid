@@ -195,9 +195,9 @@ fun BioEditorScreen(playerId: String, onBack: () -> Unit) {
                             player.name,
                             style = MaterialTheme.typography.titleLarge.copy(fontSize = 15.sp, textDecoration = TextDecoration.Underline),
                             color = Ink,
-                            modifier = Modifier.clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                            modifier = Modifier.clickable(enabled = player.pdga.hasPdgaNumber) { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
                         )
-                        Text("PDGA #${player.pdga.pdgaNumber} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted)
+                        Text("PDGA #${player.pdga.pdgaNumber.ifBlank { "—" }} · Rating ${player.pdga.rating ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = InkMuted)
                     }
                     PillTag(text = "From PDGA", containerColor = SurfaceVariant, contentColor = InkMuted)
                 }

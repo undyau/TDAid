@@ -187,7 +187,9 @@ class RealLiveRosterRepository(
     /** Loads (or reloads) every real division for [tournamentId] — a brand-new tournament pick, a
      *  manual "Sync Now"/"Retry", or Field Mode's own refresh all funnel through here, so this is
      *  the one place that needs to honor [AppSettings.clearBioDataOnNewEvent]: wiping TD-entered
-     *  bio notes whenever this event's real data (re)loads, not just the first time. */
+     *  bio notes *and* this tournament's cached PDGA profiles whenever this event's real data
+     *  (re)loads, not just the first time — otherwise every already-cached player would still be
+     *  skipped as a cache hit on the very reload meant to refresh them. */
     override fun loadAllDivisions(tournamentId: String) {
         loadJob?.cancel()
         adgJob?.cancel()
@@ -197,6 +199,10 @@ class RealLiveRosterRepository(
             _error.value = null
             if (settingsRepository.settings.first().clearBioDataOnNewEvent) {
                 bioNotesRepository.clearAll()
+                // Cached PDGA profiles (member-since, recent results) are the other half of a
+                // player's "profile" — clearing bio notes but leaving these behind would still
+                // skip every already-cached player as a silent cache hit on this same reload.
+                profileCacheRepository.clear(tournamentId)
             }
             _loadingStatus.value = "Finding real divisions…"
             pdgaRepository.fetchEventMeta(tournamentId)
@@ -259,16 +265,21 @@ class RealLiveRosterRepository(
                     TeeGroup(
                         time = teeTime.ifEmpty { "TBD" },
                         division = division,
-                        players = players.map { r ->
+                        players = players.mapIndexed { index, r ->
                             val homeLocation = listOfNotNull(r.city, r.country).joinToString(", ").ifEmpty { null }
+                            // A player with no PDGA number (amateur/junior in a mixed local event)
+                            // still needs a unique id — falling back to their PDGA number would
+                            // collide every such player in the tournament onto "pdga-0" or "".
+                            val id = r.pdgaNumber?.let { playerIdForPdgaNumber(it.toString()) }
+                                ?: "local-$division-$teeTime-$index"
                             Player(
-                                id = playerIdForPdgaNumber(r.pdgaNumber.toString()),
+                                id = id,
                                 name = "${r.firstName} ${r.lastName}".trim(),
-                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber.toString(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
+                                pdga = PdgaProfile(pdgaNumber = r.pdgaNumber?.toString().orEmpty(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
                                 recentResult = "—",
                                 bio = describePlayer(homeLocation = homeLocation)
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
-                                overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r.pdgaNumber] ?: "—") },
+                                overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r] ?: "—") },
                                 division = division,
                             )
                         },
@@ -280,9 +291,11 @@ class RealLiveRosterRepository(
     /** Real standings computed from the same live results already fetched — no extra call. Ties
      *  share a rank with a "T" prefix and the next distinct score skips ahead, same as a real
      *  disc golf leaderboard (two players tied for 2nd are both "T2nd", the next is "4th"). */
-    private fun standingsFor(results: List<PdgaLiveResult>): Map<Int, String> {
+    // Keyed by result identity, not PDGA number — several real starters can share no PDGA number
+    // (or, previously, the API's 0 default), which would otherwise collide their positions together.
+    private fun standingsFor(results: List<PdgaLiveResult>): Map<PdgaLiveResult, String> {
         val scored = results.filter { it.toPar != null }.sortedBy { it.toPar }
-        val positions = mutableMapOf<Int, String>()
+        val positions = java.util.IdentityHashMap<PdgaLiveResult, String>()
         var rank = 0
         var previousScore: Int? = null
         scored.forEachIndexed { index, r ->
@@ -291,7 +304,7 @@ class RealLiveRosterRepository(
                 previousScore = r.toPar
             }
             val tied = scored.count { it.toPar == r.toPar } > 1
-            positions[r.pdgaNumber] = (if (tied) "T" else "") + rank.asOrdinal()
+            positions[r] = (if (tied) "T" else "") + rank.asOrdinal()
         }
         return positions
     }
@@ -364,6 +377,10 @@ class RealLiveRosterRepository(
             // go the entire load without its players' details ever being fetched.
             val allTargets = loaded.entries
                 .flatMap { (division, roster) -> roster.groups.flatMap { g -> g.players.map { Target(g.time, division, it) } } }
+                // A player with no PDGA number (amateur/junior in a mixed local event) has no
+                // pdga.com profile to fetch — leaving them in would collide them all onto one
+                // cache entry (see PlayerProfileCacheRepository key) after the first such fetch.
+                .filter { it.player.pdga.hasPdgaNumber }
                 .sortedWith(
                     compareBy(
                         { TeeAlarmScheduler.parseTodayMillis(it.teeTime) == null },

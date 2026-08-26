@@ -27,12 +27,18 @@ interface PlayerProfileCacheDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: PlayerProfileCacheEntity)
+
+    @Query("DELETE FROM player_profile_cache WHERE tournamentId = :tournamentId")
+    suspend fun clearForTournament(tournamentId: String)
 }
 
 interface PlayerProfileCacheRepository {
     /** Everything cached for this tournament so far, keyed by PDGA number. */
     suspend fun get(tournamentId: String): Map<String, PdgaPlayerProfile>
     suspend fun save(tournamentId: String, pdgaNumber: String, profile: PdgaPlayerProfile)
+    /** Drops every cached profile for this tournament, so the next prefetch re-fetches everyone
+     *  instead of treating them as cache hits. */
+    suspend fun clear(tournamentId: String)
 }
 
 class RoomPlayerProfileCacheRepository(private val dao: PlayerProfileCacheDao) : PlayerProfileCacheRepository {
@@ -52,5 +58,9 @@ class RoomPlayerProfileCacheRepository(private val dao: PlayerProfileCacheDao) :
                 bestResultThisYear = profile.bestResultThisYear,
             ),
         )
+    }
+
+    override suspend fun clear(tournamentId: String) {
+        dao.clearForTournament(tournamentId)
     }
 }

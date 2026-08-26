@@ -8,7 +8,11 @@ data class PdgaProfile(
     val memberSince: String,
     /** City/country as reported by PDGA — null for any player who hasn't listed one. */
     val homeLocation: String? = null,
-)
+) {
+    /** False for a real starter with no PDGA member number (e.g. an amateur/junior in a mixed
+     *  local event) — there's no pdga.com profile to link to or prefetch for these players. */
+    val hasPdgaNumber: Boolean get() = pdgaNumber.isNotBlank()
+}
 
 /** Optional ranking pulled from the Australian Disc Golf (ADG) Tour Leaderboard. Null if unranked there. */
 data class AdgRanking(

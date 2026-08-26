@@ -280,7 +280,9 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                         Spacer(Modifier.width(7.dp))
                                     }
                                     player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
-                                    PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
+                                    if (player.pdga.hasPdgaNumber) {
+                                        PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
+                                    }
                                     Spacer(Modifier.width(8.dp))
                                     Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                                 }
@@ -417,9 +419,9 @@ private fun BioSheetContent(player: Player) {
                     player.name,
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = 16.5.sp, textDecoration = TextDecoration.Underline),
                     color = Ink,
-                    modifier = Modifier.clickable { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
+                    modifier = Modifier.clickable(enabled = player.pdga.hasPdgaNumber) { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
                 )
-                Text("PDGA #${player.pdga.pdgaNumber} · Member since ${player.pdga.memberSince}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
+                Text("PDGA #${player.pdga.pdgaNumber.ifBlank { "—" }} · Member since ${player.pdga.memberSince}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
             }
         }
         Spacer(Modifier.height(14.dp))

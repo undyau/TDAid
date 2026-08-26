@@ -40,7 +40,10 @@ data class PdgaLiveResult(
     val teeTime: String,
     val firstName: String,
     val lastName: String,
-    val pdgaNumber: Int,
+    /** Null for a real starter PDGA Live doesn't have a member number for — an amateur or junior
+     *  in a mixed local event, not necessarily a data error — rather than the API's own default
+     *  of 0, which would otherwise collide every such player onto the same fake number. */
+    val pdgaNumber: Int?,
     val rating: Int?,
     val city: String?,
     val country: String?,
@@ -182,7 +185,7 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                         teeTime = s.optString("TeeTime").trim(),
                         firstName = s.optString("FirstName").trim(),
                         lastName = s.optString("LastName").trim(),
-                        pdgaNumber = s.optInt("PDGANum"),
+                        pdgaNumber = s.optInt("PDGANum", 0).takeIf { it > 0 },
                         rating = s.optInt("Rating").takeIf { s.has("Rating") && !s.isNull("Rating") },
                         city = s.optString("City").trim().ifEmpty { null },
                         country = s.optString("Country").trim().ifEmpty { null },

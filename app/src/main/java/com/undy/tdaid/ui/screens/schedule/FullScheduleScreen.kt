@@ -233,7 +233,7 @@ private fun ScheduleRowItem(row: ScheduleRow) {
                         if (index > 0) append("  ·  ")
                         withLink(
                             LinkAnnotation.Clickable(tag = "player-${player.id}") {
-                                openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber))
+                                if (player.pdga.hasPdgaNumber) openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber))
                             },
                         ) {
                             withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {

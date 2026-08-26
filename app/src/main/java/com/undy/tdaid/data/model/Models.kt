@@ -42,7 +42,9 @@ data class Player(
     val hasCustomNotes: Boolean = false,
     val round1: RoundResult? = null,
     val overall: TournamentStanding? = null,
-    val adg: AdgRanking? = null,
+    /** Every ADG Tour division this player is ranked in — a player can be ranked in more than one
+     *  (e.g. Open and Masters), so this isn't just their single best ranking. Empty if unranked. */
+    val adg: List<AdgRanking> = emptyList(),
     /** Which real division this player is competing in. A tee group can legitimately mix
      *  divisions (a shared card teeing off together), so this lives on the player rather than
      *  only on the group. */
@@ -50,6 +52,18 @@ data class Player(
 ) {
     val initials: String
         get() = name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase()
+}
+
+/** Formats a rank as "1st", "2nd", "3rd", "4th", etc. */
+fun Int.asOrdinal(): String {
+    val suffix = when {
+        this % 100 in 11..13 -> "th"
+        this % 10 == 1 -> "st"
+        this % 10 == 2 -> "nd"
+        this % 10 == 3 -> "rd"
+        else -> "th"
+    }
+    return "$this$suffix"
 }
 
 /** The [Player.id] a real PDGA-sourced starter gets — used anywhere a PDGA number needs to be

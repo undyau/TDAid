@@ -5,6 +5,7 @@ import android.os.PowerManager
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.PlayerProfileCacheRepository
 import com.undy.tdaid.data.model.AdgRanking
+import com.undy.tdaid.data.model.asOrdinal
 import com.undy.tdaid.data.model.PdgaProfile
 import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.TeeGroup
@@ -309,17 +310,6 @@ class RealLiveRosterRepository(
         return positions
     }
 
-    private fun Int.asOrdinal(): String {
-        val suffix = when {
-            this % 100 in 11..13 -> "th"
-            this % 10 == 1 -> "st"
-            this % 10 == 2 -> "nd"
-            this % 10 == 3 -> "rd"
-            else -> "th"
-        }
-        return "$this$suffix"
-    }
-
     /** One request for the whole ADG Tour leaderboard, matched to real starters by name — cheap
      *  enough to just do in bulk, unlike the PDGA per-player profile fetch below. A starter whose
      *  real name doesn't match anyone on the leaderboard (nickname, married name, etc.) falls back
@@ -331,16 +321,18 @@ class RealLiveRosterRepository(
             val rows = adgRepository.fetchLeaderboard().getOrNull()
             if (rows.isNullOrEmpty()) return@launch
 
-            fun nameMatch(name: String) = rows.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            // A player can be ranked in more than one ADG division (e.g. Open and Masters) — every
+            // row under their name is a real ranking, not just the first one found.
+            fun nameMatches(name: String) = rows.filter { it.name.equals(name, ignoreCase = true) }
 
             val allPlayers = _rosters.value.values.flatMap { roster -> roster.groups.flatMap { it.players } }
-            val needsMemberLookup = allPlayers.any { nameMatch(it.name) == null }
+            val needsMemberLookup = allPlayers.any { nameMatches(it.name).isEmpty() }
             val members = if (needsMemberLookup) adgRepository.fetchMemberList().getOrNull() else null
 
-            fun matchFor(p: Player): AdgLeaderboardRow? {
-                nameMatch(p.name)?.let { return it }
-                val member = members?.firstOrNull { it.pdgaNumber == p.pdga.pdgaNumber } ?: return null
-                return nameMatch("${member.firstName} ${member.lastName}".trim())
+            fun matchesFor(p: Player): List<AdgLeaderboardRow> {
+                nameMatches(p.name).takeIf { it.isNotEmpty() }?.let { return it }
+                val member = members?.firstOrNull { it.pdgaNumber == p.pdga.pdgaNumber } ?: return emptyList()
+                return nameMatches("${member.firstName} ${member.lastName}".trim())
             }
 
             _rosters.update { current ->
@@ -349,8 +341,17 @@ class RealLiveRosterRepository(
                         groups = roster.groups.map { group ->
                             group.copy(
                                 players = group.players.map { p ->
-                                    val match = matchFor(p)
-                                    if (match == null) p else p.copy(adg = AdgRanking(match.rank, match.division, match.points))
+                                    val matches = matchesFor(p)
+                                    if (matches.isEmpty()) {
+                                        p
+                                    } else {
+                                        // The division they're actually entered in this tournament
+                                        // leads, even if ADG lists other divisions first.
+                                        val rankings = matches
+                                            .map { AdgRanking(it.rank, it.division, it.points) }
+                                            .sortedByDescending { it.division.equals(p.division, ignoreCase = true) }
+                                        p.copy(adg = rankings)
+                                    }
                                 },
                             )
                         },

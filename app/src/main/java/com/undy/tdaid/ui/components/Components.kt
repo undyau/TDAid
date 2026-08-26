@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.undy.tdaid.data.model.AdgRanking
+import com.undy.tdaid.data.model.asOrdinal
 import com.undy.tdaid.data.model.RoundResult
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.model.asScoreLabel
@@ -123,27 +124,34 @@ private fun StatBox(label: String, value: String, detail: String, score: Int, mo
 }
 
 @Composable
-fun AdgLine(adg: AdgRanking?, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(Icons.Filled.BarChart, contentDescription = null, tint = InkMuted, modifier = Modifier.size(12.dp))
-        if (adg != null) {
-            Text(
-                text = buildAdgText(adg),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                color = InkMuted,
-            )
-        } else {
+fun AdgLine(adg: List<AdgRanking>, modifier: Modifier = Modifier) {
+    if (adg.isEmpty()) {
+        Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.BarChart, contentDescription = null, tint = InkMuted, modifier = Modifier.size(12.dp))
             Text(
                 text = "Not ranked on ADG Tour",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                 color = InkMuted,
             )
         }
+        return
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        adg.forEach { ranking ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Filled.BarChart, contentDescription = null, tint = InkMuted, modifier = Modifier.size(12.dp))
+                Text(
+                    text = buildAdgText(ranking),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                    color = InkMuted,
+                )
+            }
+        }
     }
 }
 
 private fun buildAdgText(adg: AdgRanking): String =
-    "ADG Tour #${adg.rank} · ${adg.division} · ${adg.points} pts (best 6 events)"
+    "ADG Tour ${adg.rank.asOrdinal()} · ${adg.division} · ${adg.points} pts (best 6 events)"
 
 @Composable
 fun ToggleRow(

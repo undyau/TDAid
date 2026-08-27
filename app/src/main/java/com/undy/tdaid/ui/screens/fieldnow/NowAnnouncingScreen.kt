@@ -141,13 +141,10 @@ internal fun countdownLabel(group: TeeGroup, nowMillis: Long): String {
     }
 }
 
-/** Course name(s) for [group]'s division(s) — only worth surfacing when the event actually spans
- *  more than one course, since otherwise it's just the one course every screen already names.
- *  Union across every division represented in the group (a shared tee time can mix divisions),
- *  deduped, so a mixed card never shows the same course name twice. */
+/** Course name(s) for [group]'s division(s), straight from PDGA Live — union across every
+ *  division represented in the group (a shared tee time can mix divisions), deduped, so a mixed
+ *  card never shows the same course name twice. */
 fun coursesForGroup(group: TeeGroup, rosters: Map<String, LiveRoster>): List<String> {
-    val allCourseIds = rosters.values.flatMap { it.courses }.distinctBy { it.courseId }
-    if (allCourseIds.size <= 1) return emptyList()
     val divisions = group.players.map { it.division }.distinct()
     return divisions.flatMap { rosters[it]?.courses.orEmpty() }.distinctBy { it.courseId }.map { it.name }
 }

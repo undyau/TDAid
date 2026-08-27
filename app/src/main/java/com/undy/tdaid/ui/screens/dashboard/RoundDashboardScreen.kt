@@ -53,6 +53,7 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.SectionLabel
 import com.undy.tdaid.ui.components.StepperRow
+import com.undy.tdaid.ui.components.ToggleRow
 import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.PdgaLinkIcon
 import com.undy.tdaid.ui.formatRelative
@@ -111,6 +112,10 @@ class DashboardViewModel(
 
     fun decInterval() = viewModelScope.launch {
         settingsRepository.setAnnounceInterval(settings.value.announceIntervalMin - 1)
+    }
+
+    fun setAlertsEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setAlertsEnabled(enabled)
     }
 
     /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
@@ -315,16 +320,25 @@ fun RoundDashboardScreen(
 
             item {
                 Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(16.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 16.dp, vertical = 10.dp),
                 ) {
-                    StepperRow(
-                        label = "Pre-announce interval",
-                        subtitle = "How early to surface a card before its tee time",
-                        value = settings.announceIntervalMin,
-                        unit = "min · before tee time",
-                        onDecrement = vm::decInterval,
-                        onIncrement = vm::incInterval,
+                    ToggleRow(
+                        title = "Tee-time alerts",
+                        subtitle = "Arms a real alarm for each group, even with the app closed",
+                        checked = settings.alertsEnabled,
+                        onCheckedChange = vm::setAlertsEnabled,
                     )
+                    if (settings.alertsEnabled) {
+                        Spacer(Modifier.size(10.dp))
+                        StepperRow(
+                            label = "Pre-announce interval",
+                            subtitle = "How early to surface a card before its tee time",
+                            value = settings.announceIntervalMin,
+                            unit = "min · before tee time",
+                            onDecrement = vm::decInterval,
+                            onIncrement = vm::incInterval,
+                        )
+                    }
                 }
             }
 

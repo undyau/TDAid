@@ -13,6 +13,10 @@ private val Context.dataStore by preferencesDataStore(name = "td_settings")
 
 data class AppSettings(
     val announceIntervalMin: Int = 5,
+    /** Whether Field Mode arms real OS alarms for upcoming tee times at all. Off cancels any
+     *  already-scheduled alarms and stops scheduling new ones — for a TD who'd rather announce
+     *  purely off the on-screen queue than get interrupted by a notification. */
+    val alertsEnabled: Boolean = true,
     /** A previously saved PDGA login session — lets the TD skip re-entering credentials on every
      *  app restart. Null means logged out. If the saved cookie has since expired, the next real
      *  PDGA API call just fails and the login form reappears, same as any expired web session. */
@@ -42,6 +46,7 @@ data class AppSettings(
 
 private object Keys {
     val ANNOUNCE_INTERVAL = intPreferencesKey("announce_interval_min")
+    val ALERTS_ENABLED = booleanPreferencesKey("alerts_enabled")
     val PDGA_SESSION_COOKIE_NAME = stringPreferencesKey("pdga_session_cookie_name")
     val PDGA_SESSION_COOKIE_VALUE = stringPreferencesKey("pdga_session_cookie_value")
     val PDGA_USERNAME = stringPreferencesKey("pdga_username")
@@ -58,6 +63,7 @@ private object Keys {
 interface SettingsRepository {
     val settings: Flow<AppSettings>
     suspend fun setAnnounceInterval(minutes: Int)
+    suspend fun setAlertsEnabled(enabled: Boolean)
     suspend fun savePdgaSession(cookieName: String, cookieValue: String, username: String)
     suspend fun clearPdgaSession()
     suspend fun setFetchPlayerProfiles(enabled: Boolean)
@@ -73,6 +79,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
     override val settings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
             announceIntervalMin = prefs[Keys.ANNOUNCE_INTERVAL] ?: 5,
+            alertsEnabled = prefs[Keys.ALERTS_ENABLED] ?: true,
             pdgaSessionCookieName = prefs[Keys.PDGA_SESSION_COOKIE_NAME],
             pdgaSessionCookieValue = prefs[Keys.PDGA_SESSION_COOKIE_VALUE],
             pdgaUsername = prefs[Keys.PDGA_USERNAME],
@@ -89,6 +96,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
 
     override suspend fun setAnnounceInterval(minutes: Int) {
         context.dataStore.edit { it[Keys.ANNOUNCE_INTERVAL] = minutes.coerceIn(1, 10) }
+    }
+
+    override suspend fun setAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.ALERTS_ENABLED] = enabled }
     }
 
     override suspend fun savePdgaSession(cookieName: String, cookieValue: String, username: String) {

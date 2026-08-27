@@ -90,7 +90,6 @@ import com.undy.tdaid.ui.theme.SurfaceColor
 import com.undy.tdaid.ui.theme.SurfaceVariant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -168,10 +167,15 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
 
     // Arm real OS alarms for every group still ahead today, so alerts keep firing even if
     // the TD backgrounds or fully closes the app once the round is underway. Re-arms if the
-    // roster changes (e.g. a real load finishes while this screen is open).
-    LaunchedEffect(groups) {
-        val intervalMinutes = ServiceLocator.settingsRepository.settings.first().announceIntervalMin
-        TeeAlarmScheduler.scheduleAll(context.applicationContext, groups, intervalMinutes)
+    // roster changes (e.g. a real load finishes while this screen is open) or the TD flips
+    // alerts on/off — off cancels whatever's already scheduled rather than just skipping new
+    // ones, so a TD who disables alerts mid-round doesn't still get the ones armed earlier.
+    LaunchedEffect(groups, settings.alertsEnabled, settings.announceIntervalMin) {
+        if (settings.alertsEnabled) {
+            TeeAlarmScheduler.scheduleAll(context.applicationContext, groups, settings.announceIntervalMin)
+        } else {
+            TeeAlarmScheduler.cancelAll(context.applicationContext, groups)
+        }
     }
 
     // On Deck's "in X min" is real time-until-tee-time, not a fixed label — ticks so it keeps

@@ -48,7 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -269,7 +274,21 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            player.name,
+                                            buildAnnotatedString {
+                                                append(player.name)
+                                                if (player.pronunciation.isNotBlank()) {
+                                                    append(" ")
+                                                    withStyle(
+                                                        SpanStyle(
+                                                            color = Cream.copy(alpha = 0.65f),
+                                                            fontStyle = FontStyle.Italic,
+                                                            fontWeight = FontWeight.Normal,
+                                                        ),
+                                                    ) {
+                                                        append("(${player.pronunciation})")
+                                                    }
+                                                }
+                                            },
                                             color = Cream,
                                             style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
                                             modifier = Modifier.weight(1f),

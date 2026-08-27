@@ -258,34 +258,49 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                         Spacer(Modifier.width(0.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             current.players.forEach { player ->
-                                Row(
+                                // Sponsor/walk-on song surfaced right on the card, not just behind
+                                // the info button — an announcer needs them at a glance mid-intro.
+                                val extras = listOfNotNull(
+                                    player.sponsor.takeIf { it.isNotBlank() }?.let { "Sponsored by $it" },
+                                    player.walkOnSong.takeIf { it.isNotBlank() }?.let { "Walk-on: $it" },
+                                )
+                                Column(
                                     Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
                                         .background(Cream.copy(alpha = 0.08f))
                                         .clickable { vm.openBio(player.id) }
                                         .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        player.name,
-                                        color = Cream,
-                                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    if (current.division.isEmpty() && player.division.isNotEmpty()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            player.division,
-                                            color = Cream.copy(alpha = 0.75f),
-                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 9.5.sp),
-                                            modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(Cream.copy(alpha = 0.16f)).padding(horizontal = 7.dp, vertical = 3.dp),
+                                            player.name,
+                                            color = Cream,
+                                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 14.5.sp),
+                                            modifier = Modifier.weight(1f),
                                         )
-                                        Spacer(Modifier.width(7.dp))
+                                        if (current.division.isEmpty() && player.division.isNotEmpty()) {
+                                            Text(
+                                                player.division,
+                                                color = Cream.copy(alpha = 0.75f),
+                                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 9.5.sp),
+                                                modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(Cream.copy(alpha = 0.16f)).padding(horizontal = 7.dp, vertical = 3.dp),
+                                            )
+                                            Spacer(Modifier.width(7.dp))
+                                        }
+                                        player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
+                                        if (player.pdga.hasPdgaNumber) {
+                                            PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
+                                        }
+                                        Spacer(Modifier.width(8.dp))
+                                        Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
                                     }
-                                    player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
-                                    if (player.pdga.hasPdgaNumber) {
-                                        PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
+                                    if (extras.isNotEmpty()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            extras.joinToString(" · "),
+                                            color = Cream.copy(alpha = 0.65f),
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                        )
                                     }
-                                    Spacer(Modifier.width(8.dp))
-                                    Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
                                 }
                             }
                         }

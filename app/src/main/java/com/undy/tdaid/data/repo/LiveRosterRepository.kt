@@ -287,6 +287,8 @@ class RealLiveRosterRepository(
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
                                 hasCustomNotes = customBio != null,
                                 sponsor = note?.sponsor.orEmpty(),
+                                walkOnSong = note?.walkOnSong.orEmpty(),
+                                pronunciation = note?.pronunciation.orEmpty(),
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r] ?: "—") },
                                 division = division,
                             )
@@ -450,6 +452,8 @@ class RealLiveRosterRepository(
                                 bio = customBio ?: describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
                                 hasCustomNotes = customBio != null,
                                 sponsor = note?.sponsor.orEmpty(),
+                                walkOnSong = note?.walkOnSong.orEmpty(),
+                                pronunciation = note?.pronunciation.orEmpty(),
                             )
                         }
                     },

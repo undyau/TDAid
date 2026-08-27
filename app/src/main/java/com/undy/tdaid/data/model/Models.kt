@@ -42,6 +42,10 @@ data class Player(
     val hasCustomNotes: Boolean = false,
     /** CSV-imported sponsor, blank if none on file — see [com.undy.tdaid.data.local.BioNote]. */
     val sponsor: String = "",
+    /** CSV-imported walk-on song, blank if none on file — see [com.undy.tdaid.data.local.BioNote]. */
+    val walkOnSong: String = "",
+    /** The TD's saved name-pronunciation note, blank if none — see [com.undy.tdaid.data.local.BioNote]. */
+    val pronunciation: String = "",
     val round1: RoundResult? = null,
     val overall: TournamentStanding? = null,
     /** Every ADG Tour division this player is ranked in — a player can be ranked in more than one

@@ -62,6 +62,7 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
+import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
@@ -284,7 +285,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                         PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Filled.Info, contentDescription = "View bio", tint = Cream.copy(alpha = 0.85f), modifier = Modifier.size(28.dp))
                                 }
                             }
                         }
@@ -421,7 +422,30 @@ private fun BioSheetContent(player: Player) {
                     color = Ink,
                     modifier = Modifier.clickable(enabled = player.pdga.hasPdgaNumber) { openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber)) },
                 )
-                Text("PDGA #${player.pdga.pdgaNumber.ifBlank { "—" }} · Member since ${player.pdga.memberSince}", style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp), color = InkMuted)
+                if (player.pronunciation.isNotBlank()) {
+                    Text(
+                        player.pronunciation,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                        color = InkMuted,
+                    )
+                }
+                Text(
+                    "PDGA #${player.pdga.pdgaNumber.ifBlank { "—" }} · Member since ${player.pdga.memberSince}" +
+                        (player.pdga.homeLocation?.let { " · $it" } ?: ""),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                    color = InkMuted,
+                )
+            }
+        }
+        if (player.division.isNotEmpty() || player.hasCustomNotes) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                if (player.division.isNotEmpty()) {
+                    PillTag(text = player.division, containerColor = SurfaceVariant, contentColor = InkMuted)
+                }
+                if (player.hasCustomNotes) {
+                    PillTag(text = "TD notes saved", containerColor = AccentTint, contentColor = ForestDark)
+                }
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -454,6 +478,14 @@ private fun BioSheetContent(player: Player) {
             Spacer(Modifier.height(4.dp))
             Text(
                 "Sponsored by ${player.sponsor}",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = InkMuted,
+            )
+        }
+        if (player.walkOnSong.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Walk-on song: ${player.walkOnSong}",
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = InkMuted,
             )

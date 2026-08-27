@@ -281,6 +281,13 @@ private fun PlayerRow(
                 }
                 AdgLine(player.adg)
                 Text(player.bio, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = Ink)
+                if (player.sponsor.isNotBlank()) {
+                    Text(
+                        "Sponsored by ${player.sponsor}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = InkMuted,
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PillTag(
                         text = "Cached for offline use",

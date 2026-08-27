@@ -40,6 +40,8 @@ data class Player(
     val recentResult: String,
     val bio: String,
     val hasCustomNotes: Boolean = false,
+    /** CSV-imported sponsor, blank if none on file — see [com.undy.tdaid.data.local.BioNote]. */
+    val sponsor: String = "",
     val round1: RoundResult? = null,
     val overall: TournamentStanding? = null,
     /** Every ADG Tour division this player is ranked in — a player can be ranked in more than one

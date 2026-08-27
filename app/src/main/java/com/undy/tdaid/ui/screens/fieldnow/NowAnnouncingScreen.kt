@@ -450,5 +450,13 @@ private fun BioSheetContent(player: Player) {
         AdgLine(player.adg)
         Spacer(Modifier.height(8.dp))
         Text(player.bio, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp), color = Ink)
+        if (player.sponsor.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Sponsored by ${player.sponsor}",
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = InkMuted,
+            )
+        }
     }
 }

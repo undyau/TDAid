@@ -286,6 +286,7 @@ class RealLiveRosterRepository(
                                 bio = customBio ?: describePlayer(homeLocation = homeLocation)
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
                                 hasCustomNotes = customBio != null,
+                                sponsor = note?.sponsor.orEmpty(),
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r] ?: "—") },
                                 division = division,
                             )
@@ -433,7 +434,8 @@ class RealLiveRosterRepository(
     private suspend fun mergeProfile(division: String, playerId: String, profile: PdgaPlayerProfile) {
         // A TD's saved note always wins over the auto-generated blurb below — otherwise this
         // prefetch (which runs after every load) would overwrite it right back out from under them.
-        val customBio = bioNotesRepository.getNote(playerId)?.bio?.takeIf { it.isNotBlank() }
+        val note = bioNotesRepository.getNote(playerId)
+        val customBio = note?.bio?.takeIf { it.isNotBlank() }
         _rosters.update { current ->
             val roster = current[division] ?: return@update current
             val updatedGroups = roster.groups.map { group ->
@@ -447,6 +449,7 @@ class RealLiveRosterRepository(
                                 recentResult = profile.recentResult ?: p.recentResult,
                                 bio = customBio ?: describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
                                 hasCustomNotes = customBio != null,
+                                sponsor = note?.sponsor.orEmpty(),
                             )
                         }
                     },

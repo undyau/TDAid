@@ -51,12 +51,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import com.undy.tdaid.data.ServiceLocator
-import com.undy.tdaid.data.model.Player
 import com.undy.tdaid.data.model.RowStatus
 import com.undy.tdaid.data.model.ScheduleRow
 import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.data.repo.LiveRoster
 import com.undy.tdaid.data.repo.LiveRosterRepository
+import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.PdgaAttribution
 import com.undy.tdaid.ui.components.scoreColor
@@ -85,39 +85,33 @@ class FullScheduleViewModel(
      *  tournament is selected and loaded. Status is derived from the real tee times against the
      *  current time: passed means done, the single soonest not-yet-passed group across every
      *  division is the one under way now, everything else (including any group with no
-     *  published tee time yet) is upcoming. */
+     *  published tee time yet) is upcoming. Grouped by tee time across every division (via
+     *  [mergeGroupsAcrossDivisions]), same as Field Mode's announce queue — a shared tee time is
+     *  one physical card, so divisions that tee off together belong on one row, not a separate
+     *  row per division. [ScheduleRow.division] is blank when a row's players aren't all the
+     *  same division, same convention as [com.undy.tdaid.data.model.TeeGroup.division]. */
     fun rowsFor(rosters: Map<String, LiveRoster>): List<ScheduleRow> {
         if (rosters.isEmpty()) return emptyList()
 
-        data class Raw(val time: String, val division: String, val players: List<Player>, val millis: Long?)
         val now = System.currentTimeMillis()
-        val raw = rosters.entries
-            .flatMap { (division, roster) ->
-                roster.groups.map { group ->
-                    Raw(
-                        time = group.time,
-                        division = division,
-                        players = group.players,
-                        millis = TeeAlarmScheduler.parseTodayMillis(group.time),
-                    )
-                }
-            }
-            .sortedWith(compareBy({ it.millis == null }, { it.millis ?: Long.MAX_VALUE }))
-        val nextUpcomingIndex = raw.indexOfFirst { it.millis != null && it.millis >= now }
+        val groups = mergeGroupsAcrossDivisions(rosters)
+        val millis = groups.map { TeeAlarmScheduler.parseTodayMillis(it.time) }
+        val nextUpcomingIndex = groups.indices.firstOrNull { millis[it] != null && millis[it]!! >= now } ?: -1
 
-        return raw.mapIndexed { index, r ->
+        return groups.mapIndexed { index, group ->
+            val groupMillis = millis[index]
             val status = when {
-                r.millis == null -> RowStatus.UPCOMING
-                r.millis < now -> RowStatus.DONE
+                groupMillis == null -> RowStatus.UPCOMING
+                groupMillis < now -> RowStatus.DONE
                 index == nextUpcomingIndex -> RowStatus.CURRENT
                 else -> RowStatus.UPCOMING
             }
             ScheduleRow(
-                time = r.time,
-                division = r.division,
-                names = r.players.joinToString(" / ") { it.name },
+                time = group.time,
+                division = group.division,
+                names = group.players.joinToString(" / ") { it.name },
                 status = status,
-                players = r.players,
+                players = group.players,
             )
         }
     }
@@ -129,9 +123,14 @@ fun FullScheduleScreen(onBack: () -> Unit) {
     val rosters by vm.rosters.collectAsState()
     val lastLoadedAtMillis by vm.lastLoadedAtMillis.collectAsState()
     val rows = vm.rowsFor(rosters)
-    val divisionFilters = listOf("ALL") + rows.map { it.division }.distinct()
+    // A merged, mixed-division row (see rowsFor) has a blank ScheduleRow.division, so its real
+    // divisions come from its players instead — otherwise those divisions would vanish from the
+    // filter chips entirely, and filtering by one would drop that row instead of still showing it.
+    fun divisionsOf(row: ScheduleRow) = row.division.takeIf { it.isNotEmpty() }?.let { listOf(it) }
+        ?: row.players.map { it.division }.filter { it.isNotEmpty() }.distinct()
+    val divisionFilters = listOf("ALL") + rows.flatMap { divisionsOf(it) }.distinct()
     var filter by remember { mutableStateOf("ALL") }
-    val filteredRows = rows.filter { filter == "ALL" || it.division == filter }
+    val filteredRows = rows.filter { filter == "ALL" || filter in divisionsOf(it) }
 
     Column(
         Modifier.fillMaxSize().background(com.undy.tdaid.ui.theme.BgPaper)
@@ -219,18 +218,29 @@ private fun ScheduleRowItem(row: ScheduleRow) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(row.time, style = MaterialTheme.typography.titleLarge.copy(fontSize = 13.5.sp), color = Ink, modifier = Modifier.width(72.dp))
-        Text(
-            row.division,
-            color = ForestDark,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-            modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(ForestTint).padding(horizontal = 7.dp, vertical = 3.dp),
-        )
-        Spacer(Modifier.width(9.dp))
+        if (row.division.isNotEmpty()) {
+            Text(
+                row.division,
+                color = ForestDark,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
+                modifier = Modifier.clip(RoundedCornerShape(100.dp)).background(ForestTint).padding(horizontal = 7.dp, vertical = 3.dp),
+            )
+            Spacer(Modifier.width(9.dp))
+        }
         if (row.players.isNotEmpty()) {
             Text(
                 buildAnnotatedString {
                     row.players.forEachIndexed { index, player ->
                         if (index > 0) append("  ·  ")
+                        // A shared tee time across divisions merges onto one row (see
+                        // FullScheduleViewModel.rowsFor) — with no single group-level division
+                        // pill to lean on, each player needs their own division tag inline.
+                        if (row.division.isEmpty() && player.division.isNotEmpty()) {
+                            withStyle(SpanStyle(color = ForestDark, background = ForestTint, fontWeight = FontWeight.Bold)) {
+                                append(" ${player.division} ")
+                            }
+                            append(" ")
+                        }
                         withLink(
                             LinkAnnotation.Clickable(tag = "player-${player.id}") {
                                 if (player.pdga.hasPdgaNumber) openPdgaUrl(context, pdgaPlayerPath(player.pdga.pdgaNumber))

@@ -53,6 +53,9 @@ interface BioNoteDao {
     @Query("SELECT * FROM bio_notes WHERE playerId = :playerId")
     fun observe(playerId: String): Flow<BioNoteEntity?>
 
+    @Query("SELECT * FROM bio_notes WHERE playerId = :playerId")
+    suspend fun getOnce(playerId: String): BioNoteEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: BioNoteEntity)
 
@@ -84,6 +87,9 @@ abstract class AppDatabase : RoomDatabase() {
 
 interface BioNotesRepository {
     fun observeNote(playerId: String): Flow<BioNote?>
+    /** One-shot lookup for merging a TD's saved note into a freshly (re)loaded roster — [observeNote]
+     *  would work too, but this avoids collecting a Flow per player on every load/refresh. */
+    suspend fun getNote(playerId: String): BioNote?
     suspend fun saveNote(note: BioNote)
     /** Sets [playerId]'s CSV-sourced sponsor/walk-on song, creating a bio note if none exists yet.
      *  A blank value here means the CSV had nothing for that column on this row, so it leaves
@@ -97,6 +103,8 @@ interface BioNotesRepository {
 class RoomBioNotesRepository(private val dao: BioNoteDao) : BioNotesRepository {
     override fun observeNote(playerId: String): Flow<BioNote?> =
         dao.observe(playerId).map { it?.toDomain() }
+
+    override suspend fun getNote(playerId: String): BioNote? = dao.getOnce(playerId)?.toDomain()
 
     override suspend fun saveNote(note: BioNote) {
         dao.upsert(note.toEntity())

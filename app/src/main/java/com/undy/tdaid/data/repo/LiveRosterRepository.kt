@@ -273,13 +273,19 @@ class RealLiveRosterRepository(
                             // collide every such player in the tournament onto "pdga-0" or "".
                             val id = r.pdgaNumber?.let { playerIdForPdgaNumber(it.toString()) }
                                 ?: "local-$division-$teeTime-$index"
+                            // A TD's saved note carries forward across every reload (see BioNote's
+                            // kdoc) — without this overlay, a fresh roster load/refresh would show
+                            // the auto-generated blurb below instead, making the note look cleared.
+                            val note = bioNotesRepository.getNote(id)
+                            val customBio = note?.bio?.takeIf { it.isNotBlank() }
                             Player(
                                 id = id,
                                 name = "${r.firstName} ${r.lastName}".trim(),
                                 pdga = PdgaProfile(pdgaNumber = r.pdgaNumber?.toString().orEmpty(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
                                 recentResult = "—",
-                                bio = describePlayer(homeLocation = homeLocation)
+                                bio = customBio ?: describePlayer(homeLocation = homeLocation)
                                     ?: "Real PDGA Live starter — full profile loading in the background.",
+                                hasCustomNotes = customBio != null,
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r] ?: "—") },
                                 division = division,
                             )
@@ -424,7 +430,10 @@ class RealLiveRosterRepository(
         }
     }
 
-    private fun mergeProfile(division: String, playerId: String, profile: PdgaPlayerProfile) {
+    private suspend fun mergeProfile(division: String, playerId: String, profile: PdgaPlayerProfile) {
+        // A TD's saved note always wins over the auto-generated blurb below — otherwise this
+        // prefetch (which runs after every load) would overwrite it right back out from under them.
+        val customBio = bioNotesRepository.getNote(playerId)?.bio?.takeIf { it.isNotBlank() }
         _rosters.update { current ->
             val roster = current[division] ?: return@update current
             val updatedGroups = roster.groups.map { group ->
@@ -436,7 +445,8 @@ class RealLiveRosterRepository(
                             p.copy(
                                 pdga = p.pdga.copy(memberSince = profile.memberSince ?: p.pdga.memberSince),
                                 recentResult = profile.recentResult ?: p.recentResult,
-                                bio = describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
+                                bio = customBio ?: describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
+                                hasCustomNotes = customBio != null,
                             )
                         }
                     },

@@ -267,7 +267,14 @@ class RealLiveRosterRepository(
                         time = teeTime.ifEmpty { "TBD" },
                         division = division,
                         players = players.mapIndexed { index, r ->
-                            val homeLocation = listOfNotNull(r.city, r.country).joinToString(", ").ifEmpty { null }
+                            // PDGA Live's own API returns the literal string "null" for a missing
+                            // city/country rather than omitting the field, so a plain null-filter
+                            // isn't enough — confirmed live: a player with neither on file otherwise
+                            // shows up as "From null, null".
+                            val homeLocation = listOfNotNull(r.city, r.country)
+                                .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+                                .joinToString(", ")
+                                .ifEmpty { null }
                             // A player with no PDGA number (amateur/junior in a mixed local event)
                             // still needs a unique id — falling back to their PDGA number would
                             // collide every such player in the tournament onto "pdga-0" or "".

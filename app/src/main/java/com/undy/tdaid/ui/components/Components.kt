@@ -36,7 +36,9 @@ import com.undy.tdaid.ui.theme.ForestDark
 import com.undy.tdaid.ui.theme.ForestTint
 import com.undy.tdaid.ui.theme.Ink
 import com.undy.tdaid.ui.theme.InkMuted
+import com.undy.tdaid.ui.theme.ScoreBadOnDark
 import com.undy.tdaid.ui.theme.ScoreGoodOnDark
+import com.undy.tdaid.ui.theme.ScoreNeutralOnDark
 import com.undy.tdaid.ui.theme.SurfaceVariant
 
 @Composable
@@ -69,8 +71,11 @@ fun PillTag(
 
 fun scoreColor(score: Int, onDark: Boolean): Color = when {
     score < 0 -> if (onDark) ScoreGoodOnDark else ForestDark
-    score > 0 -> Accent
-    else -> if (onDark) Color.White.copy(alpha = 0.78f) else Ink
+    // Plain Accent orange on the dark Forest card reads at ~2:1 contrast — nearly unreadable
+    // in direct sun. ScoreBadOnDark keeps the same warm "over par" hue but bright enough to
+    // read outdoors.
+    score > 0 -> if (onDark) ScoreBadOnDark else Accent
+    else -> if (onDark) ScoreNeutralOnDark else Ink
 }
 
 @Composable
@@ -81,7 +86,9 @@ fun ScoreChip(score: Int, onDark: Boolean = false, modifier: Modifier = Modifier
         style = MaterialTheme.typography.titleLarge.copy(fontSize = 13.sp),
         modifier = modifier
             .clip(RoundedCornerShape(100.dp))
-            .background(if (onDark) Color.White.copy(alpha = 0.14f) else SurfaceVariant)
+            // A darker, more opaque pill (vs. a faint white wash) gives every on-dark score
+            // color real contrast against it instead of nearly matching the card behind it.
+            .background(if (onDark) Color.Black.copy(alpha = 0.25f) else SurfaceVariant)
             .padding(horizontal = 9.dp, vertical = 3.dp),
     )
 }

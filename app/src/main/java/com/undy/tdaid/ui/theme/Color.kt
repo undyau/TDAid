@@ -21,3 +21,6 @@ val ScoreGood = ForestDark
 val ScoreBad = Accent
 val ScoreGoodOnDark = Color(0xFFBFE6C8)
 val ScoreNeutralOnDark = Color(0xFFC7D2C9)
+// Accent (the "over par" orange) reads at only ~2:1 against the Forest card — nearly invisible
+// in direct sun. This is a brighter, lighter-shifted version kept for on-dark use only.
+val ScoreBadOnDark = Color(0xFFFFB27A)

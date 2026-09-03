@@ -306,7 +306,15 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                             )
                                             Spacer(Modifier.width(7.dp))
                                         }
-                                        player.overall?.let { ScoreChip(it.scoreToPar, onDark = true) }
+                                        player.overall?.let {
+                                            Text(
+                                                it.position,
+                                                color = Cream.copy(alpha = 0.75f),
+                                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                                                modifier = Modifier.padding(end = 7.dp),
+                                            )
+                                            ScoreChip(it.scoreToPar, onDark = true)
+                                        }
                                         if (player.pdga.hasPdgaNumber) {
                                             PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
                                         }

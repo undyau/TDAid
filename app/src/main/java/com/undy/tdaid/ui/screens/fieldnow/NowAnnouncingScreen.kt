@@ -69,6 +69,7 @@ import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
 import com.undy.tdaid.ui.components.CheckInButton
 import com.undy.tdaid.ui.components.PillTag
+import com.undy.tdaid.ui.components.OutlineButton
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.OverallStatRow
 import com.undy.tdaid.ui.components.RoundStatRow
@@ -128,6 +129,9 @@ class NowAnnouncingViewModel(
     fun bioPlayer(groups: List<TeeGroup>): Player? = groups.flatMap { it.players }.find { it.id == bioPlayerId }
 
     fun advance(groups: List<TeeGroup>) { if (!done(groups)) currentIndex++ }
+    /** Lets a TD correct an accidental "Mark Announced" tap, or re-announce the group they just
+     *  finished, without losing their place further back than one step. */
+    fun goBack() { if (currentIndex > 0) currentIndex-- }
     fun openBio(id: String) { bioPlayerId = id }
     fun closeBio() { bioPlayerId = null }
 
@@ -350,29 +354,34 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
             }
 
             item {
-                when {
-                    groups.isEmpty() -> Text(
-                        "No tournament loaded yet — select and load one from Setup Mode.",
-                        color = InkMuted,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                    vm.done(groups) -> Text(
-                        "All groups announced ✓",
-                        color = ForestDark,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                    else -> PrimaryButton(
-                        text = "Mark Announced · Next Group",
-                        onClick = { vm.advance(groups) },
-                        trailing = {
-                            Spacer(Modifier.width(7.dp))
-                            Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = ForestDark, modifier = Modifier.size(16.dp))
-                        },
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (vm.currentIndex > 0) {
+                        OutlineButton(text = "Previous Group", onClick = vm::goBack)
+                    }
+                    when {
+                        groups.isEmpty() -> Text(
+                            "No tournament loaded yet — select and load one from Setup Mode.",
+                            color = InkMuted,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        vm.done(groups) -> Text(
+                            "All groups announced ✓",
+                            color = ForestDark,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        else -> PrimaryButton(
+                            text = "Mark Announced · Next Group",
+                            onClick = { vm.advance(groups) },
+                            trailing = {
+                                Spacer(Modifier.width(7.dp))
+                                Icon(Icons.Filled.ArrowForward, contentDescription = null, tint = ForestDark, modifier = Modifier.size(16.dp))
+                            },
+                        )
+                    }
                 }
             }
 

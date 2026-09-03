@@ -528,6 +528,15 @@ private fun BioSheetContent(player: Player) {
                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(9.dp)).background(AccentTint).padding(horizontal = 11.dp, vertical = 7.dp),
             )
         }
+        if (!player.lastWin.isNullOrBlank()) {
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "Last win: ${player.lastWin}",
+                color = ForestDark,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 11.5.sp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(AccentTint).padding(horizontal = 11.dp, vertical = 7.dp),
+            )
+        }
         Spacer(Modifier.height(10.dp))
         if (player.round1 != null && player.overall != null) {
             RoundStatRow(round1 = player.round1, overall = player.overall)

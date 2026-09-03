@@ -38,6 +38,9 @@ data class Player(
     val name: String,
     val pdga: PdgaProfile,
     val recentResult: String,
+    /** Their most recent 1st-place finish this year, straight from PDGA's profile page — null
+     *  until the background profile fetch lands, or if they haven't won anything this year. */
+    val lastWin: String? = null,
     val bio: String,
     val hasCustomNotes: Boolean = false,
     /** CSV-imported sponsor, blank if none on file — see [com.undy.tdaid.data.local.BioNote]. */

@@ -482,6 +482,7 @@ class RealLiveRosterRepository(
                             p.copy(
                                 pdga = p.pdga.copy(memberSince = profile.memberSince ?: p.pdga.memberSince),
                                 recentResult = profile.recentResult ?: p.recentResult,
+                                lastWin = profile.lastWin ?: p.lastWin,
                                 bio = customBio ?: describePlayer(profile, p.pdga.homeLocation) ?: p.bio,
                                 hasCustomNotes = customBio != null,
                                 sponsor = note?.sponsor.orEmpty(),

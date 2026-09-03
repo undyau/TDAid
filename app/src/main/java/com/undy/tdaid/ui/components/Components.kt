@@ -1,18 +1,23 @@
 package com.undy.tdaid.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -32,6 +37,7 @@ import com.undy.tdaid.data.model.RoundResult
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.model.asScoreLabel
 import com.undy.tdaid.ui.theme.Accent
+import com.undy.tdaid.ui.theme.Cream
 import com.undy.tdaid.ui.theme.ForestDark
 import com.undy.tdaid.ui.theme.ForestTint
 import com.undy.tdaid.ui.theme.Ink
@@ -66,6 +72,44 @@ fun PillTag(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = text, color = contentColor, style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp))
+    }
+}
+
+/** Lets a TD toggle a player's checked-in status at a glance, without opening their row — see
+ *  [com.undy.tdaid.data.local.CheckInRepository]. [onDark] matches the Forest-card usage in Field
+ *  Mode, same as [ScoreChip]. */
+@Composable
+fun CheckInButton(checkedIn: Boolean, onToggle: () -> Unit, onDark: Boolean = false, modifier: Modifier = Modifier) {
+    val uncheckedContent = if (onDark) Cream.copy(alpha = 0.75f) else InkMuted
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(100.dp))
+            .then(
+                when {
+                    checkedIn && onDark -> Modifier.background(ScoreGoodOnDark)
+                    checkedIn -> Modifier.background(ForestDark)
+                    onDark -> Modifier.background(Color.Black.copy(alpha = 0.25f)).border(1.5.dp, uncheckedContent, RoundedCornerShape(100.dp))
+                    else -> Modifier.border(1.5.dp, uncheckedContent.copy(alpha = 0.4f), RoundedCornerShape(100.dp))
+                },
+            )
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    ) {
+        val contentColor = when {
+            checkedIn && onDark -> ForestDark
+            checkedIn -> Cream
+            else -> uncheckedContent
+        }
+        if (checkedIn) {
+            Icon(Icons.Filled.Check, contentDescription = null, tint = contentColor, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = if (checkedIn) "Checked In" else "Check In",
+            color = contentColor,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
+        )
     }
 }
 

@@ -3,6 +3,7 @@ package com.undy.tdaid.data.repo
 import android.content.Context
 import android.os.PowerManager
 import com.undy.tdaid.data.local.BioNotesRepository
+import com.undy.tdaid.data.local.CheckInRepository
 import com.undy.tdaid.data.local.PlayerProfileCacheRepository
 import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.asOrdinal
@@ -127,6 +128,10 @@ interface LiveRosterRepository {
      *  a different tournament (or back to the demo one), so a previous event's real data (or a
      *  still-running background fetch for it) can't leak into the new selection. */
     fun clear()
+
+    /** Marks [playerId] checked in (or not) for whichever tournament is currently loaded, persists
+     *  it, and updates [rosters] immediately so the change shows without waiting for a reload. */
+    fun setCheckedIn(playerId: String, checkedIn: Boolean)
 }
 
 class RealLiveRosterRepository(
@@ -135,6 +140,7 @@ class RealLiveRosterRepository(
     private val profileCacheRepository: PlayerProfileCacheRepository,
     private val settingsRepository: SettingsRepository,
     private val bioNotesRepository: BioNotesRepository,
+    private val checkInRepository: CheckInRepository,
     private val appContext: Context,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -251,8 +257,26 @@ class RealLiveRosterRepository(
         _loadedTournamentId.value = null
     }
 
-    private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> =
-        pdgaRepository.fetchLiveResults(tournamentId, division, round).map { divisionResult ->
+    override fun setCheckedIn(playerId: String, checkedIn: Boolean) {
+        val tournamentId = _loadedTournamentId.value ?: return
+        // Check-in is scoped per round (see CheckInEntity), so find which division/round the
+        // player actually belongs to rather than assuming a single current round.
+        val round = _rosters.value.values.firstOrNull { it.groups.any { g -> g.players.any { p -> p.id == playerId } } }?.round ?: return
+        _rosters.update { current ->
+            current.mapValues { (_, roster) ->
+                roster.copy(
+                    groups = roster.groups.map { group ->
+                        group.copy(players = group.players.map { p -> if (p.id == playerId) p.copy(checkedIn = checkedIn) else p })
+                    },
+                )
+            }
+        }
+        scope.launch { checkInRepository.setCheckedIn(tournamentId, round, playerId, checkedIn) }
+    }
+
+    private suspend fun fetchOneDivision(tournamentId: String, division: String, round: Int): Result<LiveRoster> {
+        val checkIns = checkInRepository.get(tournamentId, round)
+        return pdgaRepository.fetchLiveResults(tournamentId, division, round).map { divisionResult ->
             val results = divisionResult.results
             val positions = standingsFor(results)
             // Real foursomes group by TeeTime, not the API's CardNum (which turned out to be
@@ -298,12 +322,14 @@ class RealLiveRosterRepository(
                                 pronunciation = note?.pronunciation.orEmpty(),
                                 overall = r.toPar?.let { tp -> TournamentStanding(scoreToPar = tp, position = positions[r] ?: "—") },
                                 division = division,
+                                checkedIn = checkIns[id] ?: false,
                             )
                         },
                     )
                 }
             LiveRoster(tournamentId, division, round, groups, courses = divisionResult.courses)
         }
+    }
 
     /** Real standings computed from the same live results already fetched — no extra call. Ties
      *  share a rank with a "T" prefix and the next distinct score skips ahead, same as a real

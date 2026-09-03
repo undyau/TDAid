@@ -63,10 +63,11 @@ interface BioNoteDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class], version = 5, exportSchema = true)
+@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class, CheckInEntity::class], version = 7, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
     abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
+    abstract fun checkInDao(): CheckInDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null

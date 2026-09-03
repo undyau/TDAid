@@ -55,6 +55,9 @@ data class Player(
      *  divisions (a shared card teeing off together), so this lives on the player rather than
      *  only on the group. */
     val division: String = "",
+    /** Whether the TD has marked this player as checked in for this event — see
+     *  [com.undy.tdaid.data.local.CheckInRepository]. */
+    val checkedIn: Boolean = false,
 ) {
     val initials: String
         get() = name.split(" ").mapNotNull { it.firstOrNull() }.take(2).joinToString("").uppercase()

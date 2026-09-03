@@ -4,6 +4,7 @@ import android.content.Context
 import com.undy.tdaid.data.local.AppDatabase
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.RoomBioNotesRepository
+import com.undy.tdaid.data.local.RoomCheckInRepository
 import com.undy.tdaid.data.local.RoomPlayerProfileCacheRepository
 import com.undy.tdaid.data.prefs.DataStoreSettingsRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
@@ -38,12 +39,14 @@ object ServiceLocator {
         val database = AppDatabase.get(context)
         val profileCacheRepository = RoomPlayerProfileCacheRepository(database.playerProfileCacheDao())
         bioNotesRepository = RoomBioNotesRepository(database.bioNoteDao())
+        val checkInRepository = RoomCheckInRepository(database.checkInDao())
         liveRosterRepository = RealLiveRosterRepository(
             pdgaRepository,
             adgRepository,
             profileCacheRepository,
             settingsRepository,
             bioNotesRepository,
+            checkInRepository,
             context.applicationContext,
         )
     }

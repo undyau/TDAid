@@ -67,6 +67,7 @@ import com.undy.tdaid.data.repo.LiveRosterRepository
 import com.undy.tdaid.data.repo.mergeGroupsAcrossDivisions
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import com.undy.tdaid.ui.components.AdgLine
+import com.undy.tdaid.ui.components.CheckInButton
 import com.undy.tdaid.ui.components.PillTag
 import com.undy.tdaid.ui.components.PrimaryButton
 import com.undy.tdaid.ui.components.OverallStatRow
@@ -129,6 +130,12 @@ class NowAnnouncingViewModel(
     fun advance(groups: List<TeeGroup>) { if (!done(groups)) currentIndex++ }
     fun openBio(id: String) { bioPlayerId = id }
     fun closeBio() { bioPlayerId = null }
+
+    /** Check-in is scoped per round (see [LiveRosterRepository.setCheckedIn]) — a TD re-checks
+     *  the field in on every round, not just once for the whole event. */
+    fun toggleCheckedIn(player: Player) {
+        liveRosterRepository.setCheckedIn(player.id, !player.checkedIn)
+    }
 }
 
 /** Real minutes between [nowMillis] and [group]'s actual tee time — replaces what used to be a
@@ -315,6 +322,12 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                             )
                                             ScoreChip(it.scoreToPar, onDark = true)
                                         }
+                                        Spacer(Modifier.width(7.dp))
+                                        CheckInButton(
+                                            checkedIn = player.checkedIn,
+                                            onToggle = { vm.toggleCheckedIn(player) },
+                                            onDark = true,
+                                        )
                                         if (player.pdga.hasPdgaNumber) {
                                             PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
                                         }

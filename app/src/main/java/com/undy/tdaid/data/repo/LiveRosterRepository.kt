@@ -452,7 +452,7 @@ class RealLiveRosterRepository(
                 wakeLock?.acquire(timeoutMillis)
                 toFetch.forEachIndexed { index, target ->
                     _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${toFetch.size})"
-                    runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber, target.division) }
+                    runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber) }
                         .onSuccess { profile ->
                             mergeProfile(target.division, target.player.id, profile)
                             profileCacheRepository.save(tournamentId, target.player.pdga.pdgaNumber, profile)

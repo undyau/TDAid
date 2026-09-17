@@ -16,7 +16,68 @@ private fun winsPage(vararg rows: Pair<String, String>): org.jsoup.nodes.Documen
     return Jsoup.parse("""<table id="player-wins"><tbody>$rowsHtml</tbody></table>""")
 }
 
+// Modeled directly on the real markup at pdga.com/player/{number} — one table per division,
+// each row's `data-text` a Unix epoch (unlike the wins page's ISO date string).
+private data class Row(
+    val epochSeconds: Long,
+    val tournament: String,
+    val place: Int = 1,
+    val points: Double = 0.0,
+    val prizeDollars: Int = 0,
+)
+
+private fun profilePage(vararg divisionRows: Pair<String, List<Row>>): org.jsoup.nodes.Document {
+    val tablesHtml = divisionRows.joinToString("") { (division, rows) ->
+        val rowsHtml = rows.joinToString("") { row ->
+            """<tr><td class="place">${row.place}</td><td class="points">${row.points}</td>
+               |<td class="tournament"><a href="/tour/event/1#$division">${row.tournament}</a></td>
+               |<td class="tier">C</td>
+               |<td class="prize">${if (row.prizeDollars > 0) "$${row.prizeDollars}" else ""}</td>
+               |<td class="dates" data-text="${row.epochSeconds}">a date</td></tr>"""
+                .trimMargin()
+        }
+        """<table id="player-results-${division.lowercase()}"><tbody>$rowsHtml</tbody></table>"""
+    }
+    return Jsoup.parse(tablesHtml)
+}
+
 class PdgaProfileScraperTest {
+
+    @Test
+    fun `recent result comes from whichever division was played most recently, not the first table`() {
+        // Modeled on PDGA #196442's real profile: MA50's table (listed first) has an event dated
+        // after MA60's only event, so the true most recent result is in the second table.
+        val page = profilePage(
+            "MA50" to listOf(
+                Row(epochSeconds = 1768107600, tournament = "Watagan Homestead First Flight", place = 7),
+                Row(epochSeconds = 1785470400, tournament = "RPM Discs presents the Rumble", place = 3),
+            ),
+            "MA60" to listOf(
+                Row(epochSeconds = 1781409600, tournament = "Sefton Sesh", place = 4),
+            ),
+        )
+        val (recentResult, _) = PdgaProfileScraper.recentAndBestResultFrom(page)
+        assertEquals("3rd · RPM Discs presents the Rumble", recentResult)
+    }
+
+    @Test
+    fun `best result this year is ranked by real prize money across every division`() {
+        val page = profilePage(
+            "MA50" to listOf(Row(epochSeconds = 1, tournament = "Small Ams Event", place = 1, prizeDollars = 0, points = 10.0)),
+            "MPO" to listOf(Row(epochSeconds = 2, tournament = "Big Cash Event", place = 14, prizeDollars = 500, points = 210.0)),
+        )
+        val (_, bestResultThisYear) = PdgaProfileScraper.recentAndBestResultFrom(page)
+        assertEquals("14th · Big Cash Event", bestResultThisYear)
+    }
+
+    @Test
+    fun `recent and best result are both null when there are no results tables at all`() {
+        val (recentResult, bestResultThisYear) = PdgaProfileScraper.recentAndBestResultFrom(
+            Jsoup.parse("<html><body>No results here</body></html>"),
+        )
+        assertNull(recentResult)
+        assertNull(bestResultThisYear)
+    }
 
     @Test
     fun `last win label names the tournament from a single-win career-wins page`() {

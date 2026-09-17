@@ -22,7 +22,7 @@ class PdgaProfileScraperTest {
     fun `last win label names the tournament from a single-win career-wins page`() {
         assertEquals(
             "1st · Sefton Shank",
-            PdgaProfileScraper.lastWinLabelFrom(winsPage("2025-12-14" to "Sefton Shank")),
+            PdgaProfileScraper.lastWinLabelFrom(winsPage("2025-12-14" to "Sefton Shank"), currentYear = 2025),
         )
     }
 
@@ -32,7 +32,7 @@ class PdgaProfileScraperTest {
             "2023-01-05" to "Older Win",
             "2025-12-14" to "Newer Win",
         )
-        assertEquals("1st · Newer Win", PdgaProfileScraper.lastWinLabelFrom(page))
+        assertEquals("1st · Newer Win", PdgaProfileScraper.lastWinLabelFrom(page, currentYear = 2025))
     }
 
     @Test
@@ -49,7 +49,26 @@ class PdgaProfileScraperTest {
     fun `last win label strips a trailing division list from the tournament name`() {
         assertEquals(
             "1st · Turkey Shoot",
-            PdgaProfileScraper.lastWinLabelFrom(winsPage("2025-12-14" to "Turkey Shoot (MPO, MA1)")),
+            PdgaProfileScraper.lastWinLabelFrom(
+                winsPage("2025-12-14" to "Turkey Shoot (MPO, MA1)"),
+                currentYear = 2025,
+            ),
+        )
+    }
+
+    @Test
+    fun `last win label omits the year when the win was this year`() {
+        assertEquals(
+            "1st · Sefton Shank",
+            PdgaProfileScraper.lastWinLabelFrom(winsPage("2025-12-14" to "Sefton Shank"), currentYear = 2025),
+        )
+    }
+
+    @Test
+    fun `last win label appends the year when the win wasn't this year`() {
+        assertEquals(
+            "1st · Sefton Shank (2025)",
+            PdgaProfileScraper.lastWinLabelFrom(winsPage("2025-12-14" to "Sefton Shank"), currentYear = 2026),
         )
     }
 

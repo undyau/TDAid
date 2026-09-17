@@ -3,6 +3,7 @@ package com.undy.tdaid.data.remote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -135,15 +136,25 @@ class PdgaProfileScraper {
 
         /** Parses the "Career Wins" page's table into a "1st · <tournament>" label for whichever
          *  row is most recent, by [Win.dateKey] (the ISO date PDGA already stamps on each row, so
-         *  no date-format parsing is needed — a plain string comparison sorts it correctly).
-         *  Internal (rather than private) so it can be unit tested directly, against a real page
-         *  fragment, without a network call. */
-        internal fun lastWinLabelFrom(winsPageDocument: Document): String? =
-            winsPageDocument.selectFirst("table#player-wins")
+         *  no date-format parsing is needed — a plain string comparison sorts it correctly). A win
+         *  from any year but [currentYear] gets that year appended, since without it a year-old
+         *  win reads exactly like one from this week. Internal (rather than private) so it can be
+         *  unit tested directly, against a real page fragment, without a network call —
+         *  [currentYear] defaults to the real current year but is overridable so those tests don't
+         *  depend on when they happen to run. */
+        internal fun lastWinLabelFrom(
+            winsPageDocument: Document,
+            currentYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+        ): String? {
+            val win = winsPageDocument.selectFirst("table#player-wins")
                 ?.select("tbody tr").orEmpty()
                 .mapNotNull { it.toWin() }
                 .maxByOrNull { it.dateKey }
-                ?.let { "1st · ${it.tournament}" }
+                ?: return null
+            val winYear = win.dateKey.take(4).toIntOrNull()
+            val yearSuffix = if (winYear != null && winYear != currentYear) " ($winYear)" else ""
+            return "1st · ${win.tournament}$yearSuffix"
+        }
 
         private fun Element.toWin(): Win? {
             val dateKey = selectFirst("td.dates")?.attr("data-text")?.trim()?.ifEmpty { null } ?: return null

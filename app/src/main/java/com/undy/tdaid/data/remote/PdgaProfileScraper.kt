@@ -72,19 +72,11 @@ class PdgaProfileScraper {
     private fun Element.toResult(): Result? {
         val placeText = selectFirst("td.place")?.text()?.trim() ?: return null
         val place = placeText.toIntOrNull() ?: return null
-        val tournament = selectFirst("td.tournament a")?.text()?.trim()?.stripTrailingDivisionList() ?: return null
+        val tournament = selectFirst("td.tournament a")?.text()?.trim()?.let(::stripTrailingDivisionList) ?: return null
         val points = selectFirst("td.points")?.text()?.trim()?.toDoubleOrNull() ?: 0.0
         val prizeDollars = selectFirst("td.prize")?.text()?.trim()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
         return Result(place, points, prizeDollars, "${placeText.asPlaceLabel()} · $tournament")
     }
-
-    // Multi-division events sometimes list every division the tournament covered right on the
-    // end of its name, e.g. "Turkey Shoot (MPO, MA1, MA40)" — that's noise for a bio, not part of
-    // the event's actual name, so strip it.
-    private fun String.stripTrailingDivisionList(): String =
-        replace(TRAILING_DIVISION_LIST_IN_PARENS, "")
-            .replace(TRAILING_DIVISION_LIST_BARE, "")
-            .trim()
 
     private fun String.asPlaceLabel(): String {
         val n = toIntOrNull() ?: return this
@@ -96,5 +88,16 @@ class PdgaProfileScraper {
             else -> "th"
         }
         return "$n$suffix"
+    }
+
+    companion object {
+        /** Multi-division events sometimes list every division the tournament covered right on
+         *  the end of its name, e.g. "Turkey Shoot (MPO, MA1, MA40)" — that's noise for a bio,
+         *  not part of the event's actual name, so strip it. Internal (rather than private) so
+         *  it can be unit tested directly. */
+        internal fun stripTrailingDivisionList(name: String): String =
+            name.replace(TRAILING_DIVISION_LIST_IN_PARENS, "")
+                .replace(TRAILING_DIVISION_LIST_BARE, "")
+                .trim()
     }
 }

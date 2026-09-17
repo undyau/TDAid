@@ -25,13 +25,15 @@ private fun player(id: String, division: String) = Player(
 
 class CoursesForGroupTest {
     @Test
-    fun `no course shown when every division shares the same course`() {
+    fun `course still shown when every division shares the same course`() {
+        // A single shared course is the common case, and nothing else on the card names it, so
+        // it must show even here — see 2002f53.
         val rosters = mapOf(
             "MPO" to LiveRoster("t", "MPO", 1, emptyList(), courses = listOf(taliDiscGolfPark)),
             "FPO" to LiveRoster("t", "FPO", 1, emptyList(), courses = listOf(taliDiscGolfPark)),
         )
         val group = TeeGroup(time = "9:00 AM", players = listOf(player("p1", "MPO")), division = "MPO")
-        assertEquals(emptyList<String>(), coursesForGroup(group, rosters))
+        assertEquals(listOf("Tali Disc Golf Park"), coursesForGroup(group, rosters))
     }
 
     @Test

@@ -7,6 +7,15 @@ import org.jsoup.nodes.Element
 
 private const val USER_AGENT = "Mozilla/5.0 (Android) TDAid/1.0"
 
+// PDGA division codes look like MPO, FPO, MA1, MA40, FJ18, etc.
+private const val DIVISION_TOKEN = """[A-Z]{2,4}\d{0,3}"""
+private val TRAILING_DIVISION_LIST_IN_PARENS = Regex(
+    """\s*\(\s*$DIVISION_TOKEN(?:\s*[,/&]\s*$DIVISION_TOKEN)+\s*\)\s*$"""
+)
+private val TRAILING_DIVISION_LIST_BARE = Regex(
+    """\s*[-–—]?\s*$DIVISION_TOKEN(?:\s*[,/&]\s*$DIVISION_TOKEN)+\s*$"""
+)
+
 /** A player's real member-since year and this-year results for one division, scraped from their
  *  public PDGA profile page — everything an announcer bio can draw from. */
 data class PdgaPlayerProfile(
@@ -63,11 +72,19 @@ class PdgaProfileScraper {
     private fun Element.toResult(): Result? {
         val placeText = selectFirst("td.place")?.text()?.trim() ?: return null
         val place = placeText.toIntOrNull() ?: return null
-        val tournament = selectFirst("td.tournament a")?.text()?.trim() ?: return null
+        val tournament = selectFirst("td.tournament a")?.text()?.trim()?.stripTrailingDivisionList() ?: return null
         val points = selectFirst("td.points")?.text()?.trim()?.toDoubleOrNull() ?: 0.0
         val prizeDollars = selectFirst("td.prize")?.text()?.trim()?.filter { it.isDigit() }?.toIntOrNull() ?: 0
         return Result(place, points, prizeDollars, "${placeText.asPlaceLabel()} · $tournament")
     }
+
+    // Multi-division events sometimes list every division the tournament covered right on the
+    // end of its name, e.g. "Turkey Shoot (MPO, MA1, MA40)" — that's noise for a bio, not part of
+    // the event's actual name, so strip it.
+    private fun String.stripTrailingDivisionList(): String =
+        replace(TRAILING_DIVISION_LIST_IN_PARENS, "")
+            .replace(TRAILING_DIVISION_LIST_BARE, "")
+            .trim()
 
     private fun String.asPlaceLabel(): String {
         val n = toIntOrNull() ?: return this

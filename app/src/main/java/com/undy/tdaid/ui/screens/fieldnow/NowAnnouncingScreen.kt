@@ -412,7 +412,7 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
     if (bioPlayer != null) {
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(onDismissRequest = vm::closeBio, sheetState = sheetState, containerColor = SurfaceColor) {
-            BioSheetContent(bioPlayer)
+            BioSheetContent(bioPlayer, settings.adgConnected)
         }
     }
 }
@@ -471,7 +471,7 @@ private fun OnDeckRow(group: TeeGroup, countdown: String, urgent: Boolean, onPla
 }
 
 @Composable
-private fun BioSheetContent(player: Player) {
+private fun BioSheetContent(player: Player, adgConnected: Boolean) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(horizontal = 19.dp, vertical = 6.dp).padding(bottom = 22.dp)) {
         Row(verticalAlignment = Alignment.Top) {
@@ -547,7 +547,7 @@ private fun BioSheetContent(player: Player) {
             OverallStatRow(player.overall)
             Spacer(Modifier.height(10.dp))
         }
-        AdgLine(player.adg)
+        AdgLine(player.adg, adgConnected)
         Spacer(Modifier.height(8.dp))
         Text(player.bio, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp), color = Ink)
         if (player.sponsor.isNotBlank()) {

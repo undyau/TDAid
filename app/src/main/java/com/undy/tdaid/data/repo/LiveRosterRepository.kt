@@ -232,7 +232,7 @@ class RealLiveRosterRepository(
                     _loadedTournamentId.value = tournamentId
                     _loadingStatus.value = null
                     _loading.value = false
-                    enrichWithAdg()
+                    if (settings.adgConnected) enrichWithAdg()
                     if (settingsRepository.settings.first().fetchPlayerProfiles) {
                         startProfilePrefetch(tournamentId, loaded)
                     }

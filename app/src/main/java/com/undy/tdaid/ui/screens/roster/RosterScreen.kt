@@ -210,7 +210,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
                         group.players.forEach { player ->
                             PlayerRow(
                                 player = player,
-                                adgConnected = settings.adgConnected,
+                                showAdg = settings.adgConnected && settings.adgShowRank,
                                 expanded = expandedId == player.id,
                                 onToggle = { expandedId = if (expandedId == player.id) null else player.id },
                                 onEditBio = { onEditBio(player.id) },
@@ -230,7 +230,7 @@ fun RosterScreen(divisionCode: String, onBack: () -> Unit, onEditBio: (String) -
 @Composable
 private fun PlayerRow(
     player: Player,
-    adgConnected: Boolean,
+    showAdg: Boolean,
     expanded: Boolean,
     onToggle: () -> Unit,
     onEditBio: () -> Unit,
@@ -281,7 +281,7 @@ private fun PlayerRow(
                 } else if (player.overall != null) {
                     OverallStatRow(player.overall)
                 }
-                AdgLine(player.adg, adgConnected)
+                AdgLine(player.adg, showAdg)
                 Text(player.bio, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = Ink)
                 if (player.sponsor.isNotBlank()) {
                     Text(

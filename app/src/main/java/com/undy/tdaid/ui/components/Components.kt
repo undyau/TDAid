@@ -174,12 +174,14 @@ private fun StatBox(label: String, value: String, detail: String, score: Int, mo
     }
 }
 
-/** Nothing to show when the TD hasn't connected ADG Tour at all — "Not ranked on ADG Tour" would
- *  otherwise appear on every single bio, which reads as a real (and irrelevant) fact about the
- *  player rather than a reflection of a data source that's simply off. */
+/** Nothing to show when the TD hasn't connected ADG Tour, or has turned off "Show ADG Tour rank
+ *  in bios" while still connected — "Not ranked on ADG Tour" would otherwise appear on every
+ *  single bio, which reads as a real (and irrelevant) fact about the player rather than a
+ *  reflection of a data source that's simply off or hidden. Callers pass
+ *  `settings.adgConnected && settings.adgShowRank` rather than either flag alone. */
 @Composable
-fun AdgLine(adg: List<AdgRanking>, adgConnected: Boolean, modifier: Modifier = Modifier) {
-    if (!adgConnected) return
+fun AdgLine(adg: List<AdgRanking>, show: Boolean, modifier: Modifier = Modifier) {
+    if (!show) return
     if (adg.isEmpty()) {
         Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Filled.BarChart, contentDescription = null, tint = InkMuted, modifier = Modifier.size(12.dp))

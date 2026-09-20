@@ -29,6 +29,10 @@ data class AppSettings(
     val fetchPlayerProfiles: Boolean = true,
     val adgConnected: Boolean = true,
     val adgShowRank: Boolean = true,
+    /** Whether Field Mode shows the per-round check-in toggle on each player card at all. On by
+     *  default; a TD who doesn't do check-in (e.g. it's handled elsewhere, or the field is too
+     *  small to bother) can hide it rather than see an unused control on every card. */
+    val checkInEnabled: Boolean = true,
     /** Whether switching to a *different* tournament wipes every TD-entered bio note and cached
      *  PDGA profile first. Off by default — bio notes are meant to carry forward (see BioNote),
      *  so this is an opt-in for a TD who wants a clean slate each event rather than reusing
@@ -60,6 +64,7 @@ private object Keys {
     val FETCH_PLAYER_PROFILES = booleanPreferencesKey("fetch_player_profiles")
     val ADG_CONNECTED = booleanPreferencesKey("adg_connected")
     val ADG_SHOW_RANK = booleanPreferencesKey("adg_show_rank")
+    val CHECK_IN_ENABLED = booleanPreferencesKey("check_in_enabled")
     val CLEAR_BIO_DATA_ON_NEW_EVENT = booleanPreferencesKey("clear_bio_data_on_new_event")
     val SELECTED_TOURNAMENT_NAME = stringPreferencesKey("selected_tournament_name")
     val SELECTED_TOURNAMENT_DATES = stringPreferencesKey("selected_tournament_dates")
@@ -77,6 +82,7 @@ interface SettingsRepository {
     suspend fun setFetchPlayerProfiles(enabled: Boolean)
     suspend fun setAdgConnected(connected: Boolean)
     suspend fun setAdgShowRank(show: Boolean)
+    suspend fun setCheckInEnabled(enabled: Boolean)
     suspend fun setClearBioDataOnNewEvent(enabled: Boolean)
     suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?)
     suspend fun clearSelectedTournament()
@@ -95,6 +101,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             fetchPlayerProfiles = prefs[Keys.FETCH_PLAYER_PROFILES] ?: true,
             adgConnected = prefs[Keys.ADG_CONNECTED] ?: true,
             adgShowRank = prefs[Keys.ADG_SHOW_RANK] ?: true,
+            checkInEnabled = prefs[Keys.CHECK_IN_ENABLED] ?: true,
             clearBioDataOnNewEvent = prefs[Keys.CLEAR_BIO_DATA_ON_NEW_EVENT] ?: false,
             selectedTournamentName = prefs[Keys.SELECTED_TOURNAMENT_NAME],
             selectedTournamentDates = prefs[Keys.SELECTED_TOURNAMENT_DATES],
@@ -138,6 +145,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
 
     override suspend fun setAdgShowRank(show: Boolean) {
         context.dataStore.edit { it[Keys.ADG_SHOW_RANK] = show }
+    }
+
+    override suspend fun setCheckInEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.CHECK_IN_ENABLED] = enabled }
     }
 
     override suspend fun setClearBioDataOnNewEvent(enabled: Boolean) {

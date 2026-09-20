@@ -118,6 +118,10 @@ class DashboardViewModel(
         settingsRepository.setAlertsEnabled(enabled)
     }
 
+    fun setCheckInEnabled(enabled: Boolean) = viewModelScope.launch {
+        settingsRepository.setCheckInEnabled(enabled)
+    }
+
     /** Re-fetches every division from PDGA Live. No-op without a real tournament selected —
      *  there's nothing real to sync. */
     fun refreshSync() {
@@ -339,6 +343,19 @@ fun RoundDashboardScreen(
                             onIncrement = vm::incInterval,
                         )
                     }
+                }
+            }
+
+            item {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    ToggleRow(
+                        title = "Player check-in",
+                        subtitle = "Shows a per-round check-in toggle on each Field Mode card",
+                        checked = settings.checkInEnabled,
+                        onCheckedChange = vm::setCheckInEnabled,
+                    )
                 }
             }
 

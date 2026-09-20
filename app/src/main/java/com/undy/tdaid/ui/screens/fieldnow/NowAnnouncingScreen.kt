@@ -326,12 +326,14 @@ fun NowAnnouncingScreen(onOpenSchedule: () -> Unit, onOpenAlert: () -> Unit) {
                                             )
                                             ScoreChip(it.scoreToPar, onDark = true)
                                         }
-                                        Spacer(Modifier.width(7.dp))
-                                        CheckInButton(
-                                            checkedIn = player.checkedIn,
-                                            onToggle = { vm.toggleCheckedIn(player) },
-                                            onDark = true,
-                                        )
+                                        if (settings.checkInEnabled) {
+                                            Spacer(Modifier.width(7.dp))
+                                            CheckInButton(
+                                                checkedIn = player.checkedIn,
+                                                onToggle = { vm.toggleCheckedIn(player) },
+                                                onDark = true,
+                                            )
+                                        }
                                         if (player.pdga.hasPdgaNumber) {
                                             PdgaLinkIcon(url = pdgaPlayerPath(player.pdga.pdgaNumber), tint = Cream.copy(alpha = 0.6f))
                                         }

@@ -192,11 +192,13 @@ class RealLiveRosterRepository(
     }
 
     /** Loads (or reloads) every real division for [tournamentId] — a brand-new tournament pick, a
-     *  manual "Sync Now"/"Retry", or Field Mode's own refresh all funnel through here, so this is
-     *  the one place that needs to honor [AppSettings.clearBioDataOnNewEvent]: wiping TD-entered
-     *  bio notes *and* this tournament's cached PDGA profiles whenever this event's real data
-     *  (re)loads, not just the first time — otherwise every already-cached player would still be
-     *  skipped as a cache hit on the very reload meant to refresh them. */
+     *  manual "Sync Now"/"Retry", or Field Mode's own refresh all funnel through here. This is the
+     *  one place that needs to honor [AppSettings.clearBioDataOnNewEvent]: wiping TD-entered bio
+     *  notes *and* this tournament's cached PDGA profiles when the event actually changes. The
+     *  comparison is against [AppSettings.lastDataLoadedTournamentId] (persisted), not the
+     *  in-memory [_loadedTournamentId] — the in-memory value doesn't survive an app restart, and
+     *  without a persisted comparison a restart with the *same* event already selected looked
+     *  identical to a genuine switch, wiping every already-cached profile on every launch. */
     override fun loadAllDivisions(tournamentId: String) {
         loadJob?.cancel()
         adgJob?.cancel()
@@ -204,13 +206,15 @@ class RealLiveRosterRepository(
         loadJob = scope.launch {
             _loading.value = true
             _error.value = null
-            if (settingsRepository.settings.first().clearBioDataOnNewEvent) {
+            val settings = settingsRepository.settings.first()
+            if (settings.clearBioDataOnNewEvent && settings.lastDataLoadedTournamentId != tournamentId) {
                 bioNotesRepository.clearAll()
                 // Cached PDGA profiles (member-since, recent results) are the other half of a
                 // player's "profile" — clearing bio notes but leaving these behind would still
                 // skip every already-cached player as a silent cache hit on this same reload.
                 profileCacheRepository.clear(tournamentId)
             }
+            settingsRepository.setLastDataLoadedTournamentId(tournamentId)
             _loadingStatus.value = "Finding real divisions…"
             pdgaRepository.fetchEventMeta(tournamentId)
                 .onSuccess { meta ->

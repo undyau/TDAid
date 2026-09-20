@@ -172,7 +172,7 @@ fun TournamentSearchScreen(onBack: () -> Unit, onGoToDataSources: () -> Unit) {
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(SurfaceColor).padding(horizontal = 14.dp)) {
                     ToggleRow(
                         "Clear bio notes on load",
-                        "Wipes every TD-entered pronunciation & bio note, and re-fetches every player's cached PDGA profile, whenever this event's data (re)loads — a fresh pick, Sync Now, or Retry. Off by default so notes and cached profiles carry forward.",
+                        "Wipes every TD-entered pronunciation & bio note, and re-fetches every player's cached PDGA profile, the first time you switch to a different event. Off by default so notes and cached profiles carry forward — reloading the same event (Sync Now, Retry, or an app restart) never wipes them.",
                         settings.clearBioDataOnNewEvent,
                         { vm.setClearBioDataOnNewEvent(it) },
                     )

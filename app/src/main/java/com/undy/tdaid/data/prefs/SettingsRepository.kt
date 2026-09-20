@@ -29,9 +29,11 @@ data class AppSettings(
     val fetchPlayerProfiles: Boolean = true,
     val adgConnected: Boolean = true,
     val adgShowRank: Boolean = true,
-    /** Whether picking a new tournament in Event Search wipes every TD-entered bio note first.
-     *  Off by default — bio notes are meant to carry forward (see BioNote), so this is an opt-in
-     *  for a TD who wants a clean slate each event rather than reusing library notes. */
+    /** Whether switching to a *different* tournament wipes every TD-entered bio note and cached
+     *  PDGA profile first. Off by default — bio notes are meant to carry forward (see BioNote),
+     *  so this is an opt-in for a TD who wants a clean slate each event rather than reusing
+     *  library notes. Reloading the same event (Sync Now, Retry, an app restart) never wipes
+     *  anything — see [lastDataLoadedTournamentId]. */
     val clearBioDataOnNewEvent: Boolean = false,
     /** A real event picked via PDGA Event Search — null until the TD selects one. */
     val selectedTournamentName: String? = null,
@@ -42,6 +44,11 @@ data class AppSettings(
      *  from PDGA Live (see LiveRosterRepository), and what other real-data tools default to
      *  instead of making the TD re-type an ID. */
     val selectedTournamentId: String? = null,
+    /** The tournament_id that bio notes & cached PDGA profiles currently belong to — set whenever
+     *  [clearBioDataOnNewEvent] decides whether to wipe them (see LiveRosterRepository.loadAllDivisions).
+     *  Persisted (unlike LiveRosterRepository's in-memory loadedTournamentId) so a reload of the
+     *  *same* event after an app restart isn't mistaken for switching to a new one. */
+    val lastDataLoadedTournamentId: String? = null,
 )
 
 private object Keys {
@@ -58,6 +65,7 @@ private object Keys {
     val SELECTED_TOURNAMENT_DATES = stringPreferencesKey("selected_tournament_dates")
     val SELECTED_TOURNAMENT_LOCATION = stringPreferencesKey("selected_tournament_location")
     val SELECTED_TOURNAMENT_ID = stringPreferencesKey("selected_tournament_id")
+    val LAST_DATA_LOADED_TOURNAMENT_ID = stringPreferencesKey("last_data_loaded_tournament_id")
 }
 
 interface SettingsRepository {
@@ -72,6 +80,7 @@ interface SettingsRepository {
     suspend fun setClearBioDataOnNewEvent(enabled: Boolean)
     suspend fun setSelectedTournament(name: String, dates: String, location: String?, tournamentId: String?)
     suspend fun clearSelectedTournament()
+    suspend fun setLastDataLoadedTournamentId(tournamentId: String)
 }
 
 class DataStoreSettingsRepository(private val context: Context) : SettingsRepository {
@@ -91,6 +100,7 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             selectedTournamentDates = prefs[Keys.SELECTED_TOURNAMENT_DATES],
             selectedTournamentLocation = prefs[Keys.SELECTED_TOURNAMENT_LOCATION],
             selectedTournamentId = prefs[Keys.SELECTED_TOURNAMENT_ID],
+            lastDataLoadedTournamentId = prefs[Keys.LAST_DATA_LOADED_TOURNAMENT_ID],
         )
     }
 
@@ -150,5 +160,9 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             prefs.remove(Keys.SELECTED_TOURNAMENT_LOCATION)
             prefs.remove(Keys.SELECTED_TOURNAMENT_ID)
         }
+    }
+
+    override suspend fun setLastDataLoadedTournamentId(tournamentId: String) {
+        context.dataStore.edit { it[Keys.LAST_DATA_LOADED_TOURNAMENT_ID] = tournamentId }
     }
 }

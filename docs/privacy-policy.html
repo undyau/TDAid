@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TD Aid Privacy Policy</title>
+<style>
+  :root {
+    --bg: #FAF6EE;
+    --bg-raised: #F1EBDC;
+    --ink: #223626;
+    --ink-soft: #4A5A4E;
+    --rule: #DCD3BE;
+    --accent: #C4622E;
+    --accent-soft: #E07B39;
+    --focus: #8AA98F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12180F;
+      --bg-raised: #1B241A;
+      --ink: #EDE7D6;
+      --ink-soft: #B9C2B2;
+      --rule: #33402F;
+      --accent: #F0996A;
+      --accent-soft: #E8955F;
+      --focus: #6F9276;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding-inline: 16px;
+    padding-block: 48px;
+  }
+
+  main {
+    max-width: 680px;
+    margin-inline: auto;
+  }
+
+  .eyebrow {
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  h1 {
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    font-size: clamp(28px, 6vw, 40px);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin: 10px 0 4px;
+    text-wrap: balance;
+  }
+
+  .meta {
+    color: var(--ink-soft);
+    font-size: 14px;
+    margin-bottom: 36px;
+  }
+  .meta a { color: inherit; }
+
+  .lede {
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink);
+    border-left: 3px solid var(--accent-soft);
+    padding-left: 16px;
+    margin: 0 0 40px;
+  }
+
+  h2 {
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    font-size: 22px;
+    margin: 44px 0 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+  }
+  section:first-of-type h2 { border-top: none; padding-top: 0; }
+
+  h3 {
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    margin: 22px 0 6px;
+    color: var(--ink);
+  }
+
+  p { margin: 0 0 14px; max-width: 65ch; }
+  ul { margin: 0 0 14px; padding-left: 1.2em; max-width: 65ch; }
+  li { margin-bottom: 6px; }
+
+  strong { color: var(--ink); }
+
+  .data-card {
+    background: var(--bg-raised);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin: 0 0 16px;
+  }
+  .data-card h3 { margin-top: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .data-card .tag {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 999px;
+    padding: 2px 9px;
+  }
+  .data-card p:last-child { margin-bottom: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin: 8px 0 20px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  th { color: var(--ink-soft); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .contact {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .contact a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .contact a:hover { text-decoration: underline; }
+
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  img { max-width: 100%; }
+</style>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<main>
+  <div class="eyebrow">TD Aid</div>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Effective September 23, 2026 · Developer contact: <a href="mailto:undyau@gmail.com">undyau@gmail.com</a></p>
+
+  <p class="lede">TD Aid is a tournament-day tool for disc golf Tournament Directors. Everything it stores lives on your own device — there is no TD Aid server, and nothing you enter is sold or shared for advertising.</p>
+
+  <section>
+    <h2>What TD Aid does</h2>
+    <p>TD Aid helps a Tournament Director run an event day-of: pulling the live roster, tee times and scores from the PDGA and the ADG Tour, running an announcing queue, sending on-device tee-time alerts, and keeping notes on players (pronunciation, sponsor, walk-on song, check-in status).</p>
+  </section>
+
+  <section>
+    <h2>Information TD Aid handles</h2>
+
+    <div class="data-card">
+      <h3>PDGA sign-in <span class="tag">Sent to PDGA only</span></h3>
+      <p>If you connect your PDGA account, the username and password you type are sent directly to PDGA's own servers at <code>pdga.com</code> to sign you in — the same request your browser would make. TD Aid never stores your password. It saves the session token PDGA returns, plus your username, in local app storage on your device so you're not asked to sign in again every time you open the app. This stays on your device until you sign out or clear the app's storage.</p>
+    </div>
+
+    <div class="data-card">
+      <h3>Tournament &amp; player data <span class="tag">Read-only, public</span></h3>
+      <p>Names, PDGA numbers, ratings, schedules and live scores are fetched from PDGA and the ADG Tour's public tournament pages for the event you select, then cached on your device so Field Mode stays fast on a weak signal.</p>
+    </div>
+
+    <div class="data-card">
+      <h3>Notes you add <span class="tag">Stays on device</span></h3>
+      <p>Pronunciation notes, sponsor, walk-on song and check-in status are either typed by you in the app or imported from a CSV file you choose. These are stored only in the app's local database and are never transmitted anywhere.</p>
+    </div>
+
+    <div class="data-card">
+      <h3>Tee-time alerts <span class="tag">On-device only</span></h3>
+      <p>Tee times are used to schedule Android alarms and notifications on your own phone. No alert or schedule data leaves your device.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What TD Aid doesn't do</h2>
+    <ul>
+      <li>No analytics, advertising, or crash-reporting SDKs</li>
+      <li>No TD Aid account system, and no TD Aid servers or database — the app talks only to PDGA and the ADG Tour, and only for the reasons above</li>
+      <li>No selling, renting, or sharing of your data with third parties</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Where your data lives, and how to remove it</h2>
+    <p>Everything TD Aid stores — cached tournament data, your notes, and your saved PDGA sign-in — lives in the app's local database and preferences on your device. You can disconnect PDGA or ADG at any time from the app's Data Sources screen. Uninstalling TD Aid, or clearing its storage from Android's App Info screen, deletes all of it immediately.</p>
+  </section>
+
+  <section>
+    <h2>Permissions TD Aid requests</h2>
+    <table>
+      <tr><th>Permission</th><th>Why</th></tr>
+      <tr><td>Internet</td><td>Fetch tournament data from PDGA and the ADG Tour</td></tr>
+      <tr><td>Notifications</td><td>Show tee-time alerts</td></tr>
+      <tr><td>Vibrate</td><td>Accompany tee-time alerts</td></tr>
+      <tr><td>Schedule exact alarm</td><td>Fire tee-time alerts at the right minute</td></tr>
+      <tr><td>Receive boot completed</td><td>Reschedule tee-time alerts after your phone restarts</td></tr>
+      <tr><td>Wake lock</td><td>Keep an alert's alarm reliable while it fires</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Children</h2>
+    <p>TD Aid is a tool for tournament staff and is not directed at children. It does not knowingly collect information from anyone under 13.</p>
+  </section>
+
+  <section>
+    <h2>Changes to this policy</h2>
+    <p>If TD Aid's data handling changes, this page will be updated and the "effective" date above will change accordingly.</p>
+  </section>
+
+  <p class="contact">Questions about this policy or your data? Email <a href="mailto:undyau@gmail.com">undyau@gmail.com</a>.</p>
+</main>
+</body>
+</html>

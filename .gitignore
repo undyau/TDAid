@@ -14,3 +14,8 @@ build/
 .cxx
 local.properties
 .claude/
+
+# Release signing (never commit real keystores or credentials)
+keystore.properties
+*.jks
+*.keystore

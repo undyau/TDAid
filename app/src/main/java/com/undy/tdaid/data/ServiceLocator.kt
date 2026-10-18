@@ -40,7 +40,9 @@ object ServiceLocator {
         val profileCacheRepository = RoomPlayerProfileCacheRepository(database.playerProfileCacheDao())
         bioNotesRepository = RoomBioNotesRepository(database.bioNoteDao())
         val checkInRepository = RoomCheckInRepository(database.checkInDao())
-        liveRosterRepository = RealLiveRosterRepository(
+        // Debug builds can swap in a fictional event for store screenshots (see DemoMode in
+        // src/debug); release builds always get null here.
+        liveRosterRepository = DemoMode.liveRosterRepositoryOrNull(context, settingsRepository) ?: RealLiveRosterRepository(
             pdgaRepository,
             adgRepository,
             profileCacheRepository,

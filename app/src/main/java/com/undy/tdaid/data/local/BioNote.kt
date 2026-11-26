@@ -1,5 +1,6 @@
 package com.undy.tdaid.data.local
 
+import androidx.room.AutoMigration
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -63,7 +64,14 @@ interface BioNoteDao {
     suspend fun clearAll()
 }
 
-@Database(entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class, CheckInEntity::class], version = 7, exportSchema = true)
+@Database(
+    entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class, PlayerApiProfileCacheEntity::class, CheckInEntity::class],
+    version = 8,
+    exportSchema = true,
+    // The app has shipped, so a schema change must not fall through to the destructive
+    // migration below and wipe a TD's bio notes and check-ins — 7→8 only adds a table.
+    autoMigrations = [AutoMigration(from = 7, to = 8)],
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
     abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
@@ -78,8 +86,8 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "tdaid.db",
             )
-                // No migration is worth writing yet for a pre-release dev build with only local
-                // test data — revisit once this ships with real user data to preserve.
+                // Only reached by a pre-release dev build older than version 7, which predates
+                // any migration and only ever held local test data.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build().also { instance = it }
         }

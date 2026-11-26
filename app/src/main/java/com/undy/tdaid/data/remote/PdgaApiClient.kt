@@ -82,6 +82,34 @@ data class PdgaLiveDivisionResult(
     val courses: List<PdgaCourseMeta>,
 )
 
+/** A player's real membership record from the official API's `players` service. */
+data class PdgaApiPlayer(
+    val pdgaNumber: String,
+    val city: String?,
+    val stateProv: String?,
+    val country: String?,
+    /** "P" (pro) or "A" (amateur). */
+    val classification: String?,
+)
+
+/** One division's worth of a player's real season stats from the official API's
+ *  `player-statistics` service — a player who played more than one division that year gets one
+ *  of these per division. */
+data class PdgaApiPlayerStats(
+    val year: Int,
+    val divisionCode: String,
+    val tournaments: Int,
+    val prize: Double,
+)
+
+/** Everything the official API fallback knows about one player — what gets cached per
+ *  tournament, so the per-player stats requests aren't repeated on every reload. */
+data class PdgaApiProfile(
+    /** Their membership record's location, for a player PDGA Live has none for. */
+    val memberLocation: String?,
+    val stats: List<PdgaApiPlayerStats>,
+)
+
 class PdgaApiException(message: String) : IOException(message)
 
 /**
@@ -228,6 +256,44 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
         }
     }
 
+    /** Real membership records for up to 200 players per request (the API's own cap) — the
+     *  fallback source for a player's bio when pdga.com's profile pages are blocked (see
+     *  [PdgaProfileBlockedException]). Member-gated like [searchEvents], but on api.pdga.com,
+     *  which isn't behind that site's bot check. */
+    suspend fun fetchPlayers(session: PdgaSession, pdgaNumbers: List<String>): List<PdgaApiPlayer> =
+        withContext(Dispatchers.IO) {
+            pdgaNumbers.distinct().chunked(200).flatMap { chunk ->
+                val numbers = URLEncoder.encode(chunk.joinToString(","), "UTF-8")
+                parsePlayers(getAuthed(session, "$BASE_URL/services/json/players?pdga_number=$numbers&limit=200", "Player lookup"))
+            }
+        }
+
+    /** One player's real season stats for [year], one row per division they played that year —
+     *  empty if they weren't current or didn't play any events that year. */
+    suspend fun fetchPlayerStatistics(session: PdgaSession, pdgaNumber: String, year: Int): List<PdgaApiPlayerStats> =
+        withContext(Dispatchers.IO) {
+            val url = "$BASE_URL/services/json/player-statistics?pdga_number=${URLEncoder.encode(pdgaNumber, "UTF-8")}&year=$year"
+            parsePlayerStatistics(getAuthed(session, url, "Player statistics"))
+        }
+
+    private fun getAuthed(session: PdgaSession, url: String, what: String): JSONObject {
+        val request = Request.Builder()
+            .url(url)
+            .header("Cookie", "${session.cookieName}=${session.cookieValue}")
+            .build()
+        return client.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw PdgaApiException("$what failed (HTTP ${response.code}): ${text.take(200)}")
+            }
+            try {
+                JSONObject(text)
+            } catch (e: Exception) {
+                throw PdgaApiException("Unexpected ${what.lowercase()} response: ${text.take(200)}")
+            }
+        }
+    }
+
     /** Shared by [fetchEventMeta] (event-wide, key `"Layouts"`) and [fetchLiveResults]
      *  (one division/round, key `"layouts"`) — same shape either way. Real events sometimes
      *  publish a layout with no course attached (e.g. a placeholder "sudden death" entry); those
@@ -241,4 +307,43 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
             val name = if (l.has("CourseName") && !l.isNull("CourseName")) l.optString("CourseName").trim() else ""
             if (courseId == null || name.isEmpty()) null else PdgaCourseMeta(courseId, name)
         }).distinctBy { it.courseId }
+
+    companion object {
+        /** Internal (rather than private) so it can be unit tested against a documented response
+         *  without a network call. */
+        internal fun parsePlayers(json: JSONObject): List<PdgaApiPlayer> {
+            val players = json.optJSONArray("players") ?: return emptyList()
+            return (0 until players.length()).mapNotNull { i ->
+                val p = players.getJSONObject(i)
+                val pdgaNumber = p.cleanString("pdga_number") ?: return@mapNotNull null
+                PdgaApiPlayer(
+                    pdgaNumber = pdgaNumber,
+                    city = p.cleanString("city"),
+                    stateProv = p.cleanString("state_prov"),
+                    country = p.cleanString("country"),
+                    classification = p.cleanString("classification"),
+                )
+            }
+        }
+
+        /** Internal (rather than private) so it can be unit tested against a documented response
+         *  without a network call. */
+        internal fun parsePlayerStatistics(json: JSONObject): List<PdgaApiPlayerStats> {
+            val rows = json.optJSONArray("players") ?: return emptyList()
+            return (0 until rows.length()).mapNotNull { i ->
+                val r = rows.getJSONObject(i)
+                PdgaApiPlayerStats(
+                    year = r.cleanString("year")?.toIntOrNull() ?: return@mapNotNull null,
+                    divisionCode = r.cleanString("division_code").orEmpty(),
+                    tournaments = r.cleanString("tournaments")?.toIntOrNull() ?: 0,
+                    prize = r.cleanString("prize")?.toDoubleOrNull() ?: 0.0,
+                )
+            }
+        }
+
+        // The API pads values with whitespace in its own docs' examples, and — like PDGA Live —
+        // optString() turns a JSON null into the literal text "null".
+        private fun JSONObject.cleanString(key: String): String? =
+            if (!has(key) || isNull(key)) null else optString(key).trim().ifEmpty { null }
+    }
 }

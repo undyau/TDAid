@@ -5,6 +5,8 @@ import com.undy.tdaid.data.remote.AdgLeaderboardRow
 import com.undy.tdaid.data.remote.AdgMember
 import com.undy.tdaid.data.remote.AdgScraper
 import com.undy.tdaid.data.remote.PdgaApiClient
+import com.undy.tdaid.data.remote.PdgaApiPlayer
+import com.undy.tdaid.data.remote.PdgaApiPlayerStats
 import com.undy.tdaid.data.remote.PdgaEventMeta
 import com.undy.tdaid.data.remote.PdgaEventResult
 import com.undy.tdaid.data.remote.PdgaLiveDivisionResult
@@ -27,6 +29,10 @@ interface PdgaRepository {
     suspend fun fetchLiveResults(tournamentId: String, division: String, round: Int): Result<PdgaLiveDivisionResult>
     /** Real division list + current round for a tournament — also needs no login. */
     suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta>
+    /** Real membership records, in bulk — needs a PDGA login. */
+    suspend fun fetchPlayers(pdgaNumbers: List<String>): Result<List<PdgaApiPlayer>>
+    /** One player's real season stats for [year] — needs a PDGA login. */
+    suspend fun fetchPlayerStatistics(pdgaNumber: String, year: Int): Result<List<PdgaApiPlayerStats>>
 }
 
 class RealPdgaRepository(
@@ -71,6 +77,16 @@ class RealPdgaRepository(
 
     override suspend fun fetchEventMeta(tournamentId: String): Result<PdgaEventMeta> =
         runCatching { client.fetchEventMeta(tournamentId) }
+
+    override suspend fun fetchPlayers(pdgaNumbers: List<String>): Result<List<PdgaApiPlayer>> = runCatching {
+        val activeSession = session ?: error("Not logged in to PDGA")
+        client.fetchPlayers(activeSession, pdgaNumbers)
+    }
+
+    override suspend fun fetchPlayerStatistics(pdgaNumber: String, year: Int): Result<List<PdgaApiPlayerStats>> = runCatching {
+        val activeSession = session ?: error("Not logged in to PDGA")
+        client.fetchPlayerStatistics(activeSession, pdgaNumber, year)
+    }
 }
 
 /**

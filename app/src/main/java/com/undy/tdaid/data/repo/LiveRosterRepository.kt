@@ -14,10 +14,13 @@ import com.undy.tdaid.data.model.playerIdForPdgaNumber
 import com.undy.tdaid.data.model.TournamentStanding
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.remote.AdgLeaderboardRow
+import com.undy.tdaid.data.remote.PdgaApiPlayerStats
+import com.undy.tdaid.data.remote.PdgaApiProfile
 import com.undy.tdaid.data.remote.PdgaCourseMeta
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
+import com.undy.tdaid.data.remote.PdgaProfileBlockedException
 import com.undy.tdaid.data.remote.PdgaProfileScraper
 import com.undy.tdaid.notify.TeeAlarmScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +34,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Calendar
+import java.util.Locale
+import kotlin.math.roundToInt
 
 /** One real division/round's worth of starters & tee times, fetched from PDGA Live. [courses] is
  *  specifically what that division/round played — an event with per-division sites (e.g. a
@@ -70,6 +77,32 @@ fun mergeGroupsAcrossDivisions(byDivision: Map<String, LiveRoster>): List<TeeGro
  *  pdga.com's robots.txt `Crawl-delay: 10`, since that prefetch is automated, bulk fetching
  *  rather than a single human-initiated lookup. */
 private const val PROFILE_PREFETCH_DELAY_MS = 10_000L
+
+/** The official API isn't bound by pdga.com's robots.txt Crawl-delay, but this is still one
+ *  request per player in bulk — kept gentle rather than firing them back to back. */
+private const val API_FALLBACK_DELAY_MS = 1_000L
+
+/** A bio built only from what the official PDGA API offers — no member-since year or event
+ *  placements, just location and season totals. One fact per season, summed across every division
+ *  played that season, since a player's stats come back as one row per division. */
+internal fun describePlayerFromApi(homeLocation: String?, stats: List<PdgaApiPlayerStats>): String? {
+    val facts = mutableListOf<String>()
+    homeLocation?.let { facts.add("From $it") }
+    val season = stats.maxOfOrNull { it.year }
+    val seasonStats = stats.filter { it.year == season }
+    val events = seasonStats.sumOf { it.tournaments }
+    if (season != null && events > 0) {
+        facts.add("$events PDGA event${if (events == 1) "" else "s"} in $season")
+        val prize = seasonStats.sumOf { it.prize }.roundToInt()
+        if (prize > 0) facts.add("${"$"}${NumberFormat.getIntegerInstance(Locale.US).format(prize)} prize money in $season")
+        val divisions = seasonStats.map { it.divisionCode }.filter { it.isNotBlank() }.distinct()
+        if (divisions.size > 1) facts.add("played ${divisions.joinToString(" & ")}")
+    }
+    return facts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.plus(".")
+}
+
+private const val PROFILE_PENDING_BIO = "Real PDGA Live starter — full profile loading in the background."
+private const val PROFILE_UNAVAILABLE_BIO = "Real PDGA Live starter — PDGA profile unavailable."
 
 /**
  * Caches the real roster(s) loaded from PDGA Live's unauthenticated endpoints for whichever
@@ -203,6 +236,7 @@ class RealLiveRosterRepository(
         loadJob?.cancel()
         adgJob?.cancel()
         prefetchJob?.cancel()
+        _profilePrefetchStatus.value = null
         loadJob = scope.launch {
             _loading.value = true
             _error.value = null
@@ -318,8 +352,7 @@ class RealLiveRosterRepository(
                                 name = "${r.firstName} ${r.lastName}".trim(),
                                 pdga = PdgaProfile(pdgaNumber = r.pdgaNumber?.toString().orEmpty(), rating = r.rating, memberSince = "—", homeLocation = homeLocation),
                                 recentResult = "—",
-                                bio = customBio ?: describePlayer(homeLocation = homeLocation)
-                                    ?: "Real PDGA Live starter — full profile loading in the background.",
+                                bio = customBio ?: describePlayer(homeLocation = homeLocation) ?: PROFILE_PENDING_BIO,
                                 hasCustomNotes = customBio != null,
                                 sponsor = note?.sponsor.orEmpty(),
                                 walkOnSong = note?.walkOnSong.orEmpty(),
@@ -444,6 +477,13 @@ class RealLiveRosterRepository(
             }
             if (toFetch.isEmpty()) return@launch
 
+            // Basic bios from an earlier blocked load show straight away; the scrape below still
+            // runs and replaces them if pdga.com has stopped blocking it.
+            val apiCached = profileCacheRepository.getApi(tournamentId)
+            toFetch.forEach { target ->
+                apiCached[target.player.pdga.pdgaNumber]?.let { mergeApiProfile(target.division, target.player.id, it) }
+            }
+
             // Doze throttles a background app's CPU/network once the screen is off, which is
             // exactly when a TD is most likely to have this running — a partial wake lock keeps
             // this specific loop's requests and delays on schedule. Bounded by an explicit
@@ -452,21 +492,110 @@ class RealLiveRosterRepository(
             val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TDAid:ProfilePrefetch")
             val timeoutMillis = toFetch.size * (PROFILE_PREFETCH_DELAY_MS + 20_000L) + 30_000L
+            var blockedAt: Int? = null
             try {
                 wakeLock?.acquire(timeoutMillis)
-                toFetch.forEachIndexed { index, target ->
+                for ((index, target) in toFetch.withIndex()) {
                     _profilePrefetchStatus.value = "Loading player profiles… (${index + 1}/${toFetch.size})"
                     runCatching { profileScraper.fetchProfile(target.player.pdga.pdgaNumber) }
                         .onSuccess { profile ->
                             mergeProfile(target.division, target.player.id, profile)
                             profileCacheRepository.save(tournamentId, target.player.pdga.pdgaNumber, profile)
                         }
+                        .onFailure { e -> if (e is PdgaProfileBlockedException) blockedAt = index }
+                    // A block applies to every player page, not just this one — carrying on would
+                    // spend the crawl delay per remaining player only to be blocked each time.
+                    if (blockedAt != null) break
                     if (index < toFetch.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
+                }
+                blockedAt?.let { from ->
+                    val remaining = toFetch.drop(from).filter { it.player.pdga.pdgaNumber !in apiCached }
+                    if (remaining.isEmpty()) {
+                        _profilePrefetchStatus.value = "Basic PDGA bios (pdga.com profile pages blocked)"
+                    } else if (pdgaRepository.isLoggedIn) {
+                        fetchApiFallback(tournamentId, remaining.map { ApiFallbackTarget(it.division, it.player) })
+                        _profilePrefetchStatus.value = "Basic PDGA bios (pdga.com profile pages blocked)"
+                    } else {
+                        _profilePrefetchStatus.value = "PDGA profiles blocked by pdga.com — sign in to PDGA for basic bios"
+                    }
+                    clearProfilePendingPlaceholders()
                 }
             } finally {
                 if (wakeLock?.isHeld == true) wakeLock.release()
             }
-            _profilePrefetchStatus.value = null
+            if (blockedAt == null) _profilePrefetchStatus.value = null
+        }
+    }
+
+    private class ApiFallbackTarget(val division: String, val player: Player)
+
+    /** The thinner, official-API version of a player's bio, for when pdga.com's profile pages are
+     *  blocked: home location plus this year's event count and prize money. The membership lookup
+     *  is one bulk request; season stats are one request per player, paced at
+     *  [API_FALLBACK_DELAY_MS]. Results go to their own cache (see
+     *  [PlayerProfileCacheRepository.getApi]), not the scraped-profile one, so a later load still
+     *  tries the richer scrape first in case pdga.com has lifted the block. */
+    private suspend fun fetchApiFallback(tournamentId: String, targets: List<ApiFallbackTarget>) {
+        _profilePrefetchStatus.value = "pdga.com blocked — loading basic PDGA stats…"
+        val members = pdgaRepository.fetchPlayers(targets.map { it.player.pdga.pdgaNumber })
+            .getOrNull().orEmpty()
+            .associateBy { it.pdgaNumber }
+        val year = Calendar.getInstance().get(Calendar.YEAR)
+        for ((index, target) in targets.withIndex()) {
+            _profilePrefetchStatus.value = "pdga.com blocked — loading basic PDGA stats… (${index + 1}/${targets.size})"
+            val pdgaNumber = target.player.pdga.pdgaNumber
+            // Early in a season most players have no stats yet for the new year — last year's
+            // still beats saying nothing. Null (rather than empty) when a request failed, so a
+            // network hiccup isn't cached as "no events".
+            val stats = pdgaRepository.fetchPlayerStatistics(pdgaNumber, year).getOrNull()?.let { current ->
+                current.ifEmpty { pdgaRepository.fetchPlayerStatistics(pdgaNumber, year - 1).getOrNull() ?: return@let null }
+            }
+            val memberLocation = members[pdgaNumber]?.let { listOfNotNull(it.city, it.stateProv ?: it.country).joinToString(", ").ifEmpty { null } }
+            val profile = PdgaApiProfile(memberLocation, stats.orEmpty())
+            mergeApiProfile(target.division, target.player.id, profile)
+            if (stats != null) profileCacheRepository.saveApi(tournamentId, pdgaNumber, profile)
+            if (index < targets.size - 1) delay(API_FALLBACK_DELAY_MS)
+        }
+    }
+
+    private suspend fun mergeApiProfile(division: String, playerId: String, profile: PdgaApiProfile) {
+        val note = bioNotesRepository.getNote(playerId)
+        val customBio = note?.bio?.takeIf { it.isNotBlank() }
+        val memberLocation = profile.memberLocation
+        val stats = profile.stats
+        _rosters.update { current ->
+            val roster = current[division] ?: return@update current
+            val updatedGroups = roster.groups.map { group ->
+                group.copy(
+                    players = group.players.map { p ->
+                        if (p.id != playerId) {
+                            p
+                        } else {
+                            val homeLocation = p.pdga.homeLocation ?: memberLocation
+                            p.copy(
+                                pdga = p.pdga.copy(homeLocation = homeLocation),
+                                bio = customBio ?: describePlayerFromApi(homeLocation, stats) ?: p.bio,
+                                hasCustomNotes = customBio != null,
+                            )
+                        }
+                    },
+                )
+            }
+            current + (division to roster.copy(groups = updatedGroups))
+        }
+    }
+
+    /** Swaps [PROFILE_PENDING_BIO] for a plain one once it's clear no profile is coming, so the
+     *  announcer isn't told details are still on their way. */
+    private fun clearProfilePendingPlaceholders() {
+        _rosters.update { current ->
+            current.mapValues { (_, roster) ->
+                roster.copy(
+                    groups = roster.groups.map { group ->
+                        group.copy(players = group.players.map { p -> if (p.bio == PROFILE_PENDING_BIO) p.copy(bio = PROFILE_UNAVAILABLE_BIO) else p })
+                    },
+                )
+            }
         }
     }
 

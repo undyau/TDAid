@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import org.jsoup.HttpStatusException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -44,6 +45,12 @@ data class PdgaPlayerProfile(
     val bestResultThisYear: String?,
 )
 
+/** pdga.com answered with its Cloudflare bot check instead of the profile page — confirmed live
+ *  (Nov 2026): an HTTP 403 "Just a moment..." interstitial for every player. That's a site-wide
+ *  block, not a per-player problem, so callers should stop fetching rather than wait out the
+ *  crawl delay for each remaining player only to be blocked again. */
+class PdgaProfileBlockedException(message: String) : Exception(message)
+
 /** There's no documented API for member-since or results — this scrapes the same public profile
  *  page a human would see (`pdga.com/player/{number}`), which is plain server-rendered HTML, not
  *  a JS-driven page. No login needed. Called at most once per player per real event load — see
@@ -57,10 +64,20 @@ class PdgaProfileScraper {
      *  tournament that happened to trigger this fetch. */
     suspend fun fetchProfile(pdgaNumber: String): PdgaPlayerProfile =
         withContext(Dispatchers.IO) {
-            val document = Jsoup.connect("https://www.pdga.com/player/$pdgaNumber")
-                .userAgent(USER_AGENT)
-                .timeout(15_000)
-                .get()
+            val document = try {
+                Jsoup.connect("https://www.pdga.com/player/$pdgaNumber")
+                    .userAgent(USER_AGENT)
+                    .timeout(15_000)
+                    .get()
+            } catch (e: HttpStatusException) {
+                if (e.statusCode == 403 || e.statusCode == 503) {
+                    throw PdgaProfileBlockedException("pdga.com returned HTTP ${e.statusCode} for player pages")
+                }
+                throw e
+            }
+            if (document.title().startsWith("Just a moment")) {
+                throw PdgaProfileBlockedException("pdga.com served a bot check instead of the player page")
+            }
 
             val memberSince = document.selectFirst("li.join-date")?.ownText()?.trim()?.ifEmpty { null }
 

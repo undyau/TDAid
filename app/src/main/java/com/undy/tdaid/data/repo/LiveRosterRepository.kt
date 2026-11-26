@@ -5,6 +5,8 @@ import android.os.PowerManager
 import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.CheckInRepository
 import com.undy.tdaid.data.local.PlayerProfileCacheRepository
+import com.undy.tdaid.data.local.SeasonResult
+import com.undy.tdaid.data.local.SeasonResultsRepository
 import com.undy.tdaid.data.model.AdgRanking
 import com.undy.tdaid.data.model.asOrdinal
 import com.undy.tdaid.data.model.PdgaProfile
@@ -18,11 +20,13 @@ import com.undy.tdaid.data.remote.PdgaApiPlayerStats
 import com.undy.tdaid.data.remote.PdgaApiProfile
 import com.undy.tdaid.data.remote.PdgaCourseMeta
 import com.undy.tdaid.data.remote.PdgaDivisionMeta
+import com.undy.tdaid.data.remote.PdgaEventResultsScraper
 import com.undy.tdaid.data.remote.PdgaLiveResult
 import com.undy.tdaid.data.remote.PdgaPlayerProfile
 import com.undy.tdaid.data.remote.PdgaProfileBlockedException
 import com.undy.tdaid.data.remote.PdgaProfileScraper
 import com.undy.tdaid.notify.TeeAlarmScheduler
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,6 +39,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -82,19 +87,42 @@ private const val PROFILE_PREFETCH_DELAY_MS = 10_000L
  *  request per player in bulk — kept gentle rather than firing them back to back. */
 private const val API_FALLBACK_DELAY_MS = 1_000L
 
-/** A bio built only from what the official PDGA API offers — no member-since year or event
- *  placements, just location and season totals. One fact per season, summed across every division
- *  played that season, since a player's stats come back as one row per division. */
-internal fun describePlayerFromApi(homeLocation: String?, stats: List<PdgaApiPlayerStats>): String? {
+/** Countries with more events than this in 12 months (the US, mainly) are too big to read one
+ *  results page at a time at pdga.com's crawl delay — only the most recent this-many are. */
+private const val MAX_SEASON_EVENTS = 300
+
+/** The bio used while pdga.com's profile pages are blocked: location and season totals from the
+ *  official API, plus — when the season results library has them (see [seasonProfileFrom]) — the
+ *  same last event / last win / best result facts the profile page used to give, over a rolling
+ *  12 months rather than the calendar year. Season totals stay per calendar year (the only way
+ *  the API reports them) and are summed across every division played, since the API returns
+ *  one row per division. */
+internal fun describePlayerFromApi(
+    homeLocation: String?,
+    stats: List<PdgaApiPlayerStats>,
+    seasonProfile: PdgaPlayerProfile? = null,
+): String? {
     val facts = mutableListOf<String>()
     homeLocation?.let { facts.add("From $it") }
     val season = stats.maxOfOrNull { it.year }
     val seasonStats = stats.filter { it.year == season }
     val events = seasonStats.sumOf { it.tournaments }
+    if (season != null && events > 0) facts.add("$events PDGA event${if (events == 1) "" else "s"} in $season")
+    seasonProfile?.recentResult?.let { facts.add("last event: $it") }
+    // Skip a fact that's already covered by one already listed, as the profile-page bio does.
+    if (seasonProfile?.lastWin != null && seasonProfile.lastWin != seasonProfile.recentResult) {
+        facts.add("last win: ${seasonProfile.lastWin}")
+    }
+    if (seasonProfile?.bestResultThisYear != null &&
+        seasonProfile.bestResultThisYear != seasonProfile.recentResult &&
+        seasonProfile.bestResultThisYear != seasonProfile.lastWin
+    ) {
+        facts.add("best result in the last 12 months: ${seasonProfile.bestResultThisYear}")
+    }
     if (season != null && events > 0) {
-        facts.add("$events PDGA event${if (events == 1) "" else "s"} in $season")
+        // PDGA reports prize money in US dollars (its own results pages label the column so).
         val prize = seasonStats.sumOf { it.prize }.roundToInt()
-        if (prize > 0) facts.add("${"$"}${NumberFormat.getIntegerInstance(Locale.US).format(prize)} prize money in $season")
+        if (prize > 0) facts.add("US${"$"}${NumberFormat.getIntegerInstance(Locale.US).format(prize)} prize money in $season")
         // Most-played first, read as a natural list: "played FA40, FA3 & FA4".
         val divisions = seasonStats
             .filter { it.divisionCode.isNotBlank() }
@@ -105,6 +133,24 @@ internal fun describePlayerFromApi(homeLocation: String?, stats: List<PdgaApiPla
         if (divisions.size > 1) facts.add("played ${divisions.dropLast(1).joinToString(", ")} & ${divisions.last()}")
     }
     return facts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.plus(".")
+}
+
+/** 12 months before today, YYYY-MM-DD — how far back the season results library reaches.
+ *  Rolling rather than the calendar year, so early in a year a player's last event and win from
+ *  the previous one still show instead of nothing. */
+private fun seasonStartDate(): String = isoDate(Calendar.getInstance().apply { add(Calendar.MONTH, -12) })
+
+private fun isoDate(calendar: Calendar): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = calendar.timeZone }.format(calendar.time)
+
+/** PDGA Live names an event's country in full ("Australia"), but the official API's event
+ *  search wants its two-letter code. Internal so it can be unit tested. */
+internal fun isoCountryCode(countryName: String?): String? {
+    val name = countryName?.trim()?.ifEmpty { null } ?: return null
+    if (name.length == 2 && name.all { it.isUpperCase() }) return name
+    return Locale.getISOCountries().firstOrNull { code ->
+        Locale("", code).getDisplayCountry(Locale.ENGLISH).equals(name, ignoreCase = true)
+    }
 }
 
 private const val PROFILE_PENDING_BIO = "Real PDGA Live starter — full profile loading in the background."
@@ -180,8 +226,10 @@ class RealLiveRosterRepository(
     private val settingsRepository: SettingsRepository,
     private val bioNotesRepository: BioNotesRepository,
     private val checkInRepository: CheckInRepository,
+    private val seasonResultsRepository: SeasonResultsRepository,
     private val appContext: Context,
     private val profileScraper: PdgaProfileScraper = PdgaProfileScraper(),
+    private val eventResultsScraper: PdgaEventResultsScraper = PdgaEventResultsScraper(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) : LiveRosterRepository {
     private val _rosters = MutableStateFlow<Map<String, LiveRoster>>(emptyMap())
@@ -274,7 +322,7 @@ class RealLiveRosterRepository(
                     _loading.value = false
                     if (settingsRepository.settings.first().adgConnected) enrichWithAdg()
                     if (settingsRepository.settings.first().fetchPlayerProfiles) {
-                        startProfilePrefetch(tournamentId, loaded)
+                        startProfilePrefetch(tournamentId, loaded, meta.country)
                     }
                 }
                 .onFailure { e ->
@@ -452,8 +500,10 @@ class RealLiveRosterRepository(
      *  rather than fired all at once. Works through players in tee-time order across every
      *  division, soonest groups first, so a group's data is ready well before it's announced.
      *  Reloading the same tournament later (e.g. after an app restart) is then a pure cache hit —
-     *  nothing gets re-fetched unless the tournament itself changes. */
-    private fun startProfilePrefetch(tournamentId: String, loaded: Map<String, LiveRoster>) {
+     *  nothing gets re-fetched unless the tournament itself changes. If pdga.com blocks the
+     *  profile pages, the rest of the field falls back to the official API and the season
+     *  results library for [countryName] (the event's own country). */
+    private fun startProfilePrefetch(tournamentId: String, loaded: Map<String, LiveRoster>, countryName: String?) {
         prefetchJob = scope.launch {
             data class Target(val teeTime: String, val division: String, val player: Player)
 
@@ -483,11 +533,16 @@ class RealLiveRosterRepository(
             }
             if (toFetch.isEmpty()) return@launch
 
-            // Basic bios from an earlier blocked load show straight away; the scrape below still
-            // runs and replaces them if pdga.com has stopped blocking it.
-            val apiCached = profileCacheRepository.getApi(tournamentId)
+            // Basic bios from an earlier blocked load show straight away — the API data cached for
+            // this tournament plus whatever the season results library already holds. The scrape
+            // below still runs and replaces them if pdga.com has stopped blocking it.
+            val fallback = FallbackState(
+                apiProfiles = profileCacheRepository.getApi(tournamentId).toMutableMap(),
+                seasonResults = seasonResultsRepository.resultsSince(seasonStartDate())
+                    .groupByTo(mutableMapOf()) { it.pdgaNumber },
+            )
             toFetch.forEach { target ->
-                apiCached[target.player.pdga.pdgaNumber]?.let { mergeApiProfile(target.division, target.player.id, it) }
+                if (fallback.has(target.player.pdga.pdgaNumber)) mergeFallbackProfile(target.division, target.player, fallback)
             }
 
             // Doze throttles a background app's CPU/network once the screen is off, which is
@@ -495,8 +550,11 @@ class RealLiveRosterRepository(
             // this specific loop's requests and delays on schedule. Bounded by an explicit
             // timeout (Android best practice: never risk an indefinitely-held lock if release()
             // is somehow skipped) sized generously for the real request pace plus network time.
+            // Not reference counted, so the season results phase below can re-arm it with its own
+            // timeout once it knows how many events it has to read.
             val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
             val wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TDAid:ProfilePrefetch")
+                ?.apply { setReferenceCounted(false) }
             val timeoutMillis = toFetch.size * (PROFILE_PREFETCH_DELAY_MS + 20_000L) + 30_000L
             var blockedAt: Int? = null
             try {
@@ -515,14 +573,18 @@ class RealLiveRosterRepository(
                     if (index < toFetch.size - 1) delay(PROFILE_PREFETCH_DELAY_MS)
                 }
                 blockedAt?.let { from ->
-                    val remaining = toFetch.drop(from).filter { it.player.pdga.pdgaNumber !in apiCached }
-                    if (remaining.isEmpty()) {
-                        _profilePrefetchStatus.value = "Basic PDGA bios (pdga.com profile pages blocked)"
-                    } else if (pdgaRepository.isLoggedIn) {
-                        fetchApiFallback(tournamentId, remaining.map { ApiFallbackTarget(it.division, it.player) })
-                        _profilePrefetchStatus.value = "Basic PDGA bios (pdga.com profile pages blocked)"
-                    } else {
+                    val blocked = toFetch.drop(from).map { FallbackTarget(it.division, it.player) }
+                    if (!pdgaRepository.isLoggedIn) {
                         _profilePrefetchStatus.value = "PDGA profiles blocked by pdga.com — sign in to PDGA for basic bios"
+                    } else {
+                        val uncached = blocked.filter { it.player.pdga.pdgaNumber !in fallback.apiProfiles }
+                        if (uncached.isNotEmpty()) fetchApiFallback(tournamentId, uncached, fallback)
+                        val eventPagesBlocked = syncSeasonResults(countryName, blocked, fallback, wakeLock)
+                        _profilePrefetchStatus.value = if (eventPagesBlocked) {
+                            "Basic PDGA bios (pdga.com profile & event pages blocked)"
+                        } else {
+                            "PDGA bios from season results (profile pages blocked)"
+                        }
                     }
                     clearProfilePendingPlaceholders()
                 }
@@ -533,15 +595,24 @@ class RealLiveRosterRepository(
         }
     }
 
-    private class ApiFallbackTarget(val division: String, val player: Player)
+    private class FallbackTarget(val division: String, val player: Player)
 
-    /** The thinner, official-API version of a player's bio, for when pdga.com's profile pages are
-     *  blocked: home location plus this year's event count and prize money. The membership lookup
-     *  is one bulk request; season stats are one request per player, paced at
-     *  [API_FALLBACK_DELAY_MS]. Results go to their own cache (see
+    /** What's known about each player (by PDGA number) while their profile page is blocked: the
+     *  official API's data and their results in the season library. Kept in memory for the rest of
+     *  the prefetch so each new piece can rebuild a player's bio from everything known so far. */
+    private class FallbackState(
+        val apiProfiles: MutableMap<String, PdgaApiProfile>,
+        val seasonResults: MutableMap<String, MutableList<SeasonResult>>,
+    ) {
+        fun has(pdgaNumber: String) = pdgaNumber in apiProfiles || pdgaNumber in seasonResults
+    }
+
+    /** The official-API part of a blocked player's bio: home location plus this calendar year's
+     *  event count and prize money. The membership lookup is one bulk request; season stats are one
+     *  request per player, paced at [API_FALLBACK_DELAY_MS]. Results go to their own cache (see
      *  [PlayerProfileCacheRepository.getApi]), not the scraped-profile one, so a later load still
      *  tries the richer scrape first in case pdga.com has lifted the block. */
-    private suspend fun fetchApiFallback(tournamentId: String, targets: List<ApiFallbackTarget>) {
+    private suspend fun fetchApiFallback(tournamentId: String, targets: List<FallbackTarget>, fallback: FallbackState) {
         _profilePrefetchStatus.value = "pdga.com blocked — loading basic PDGA stats…"
         val members = pdgaRepository.fetchPlayers(targets.map { it.player.pdga.pdgaNumber })
             .getOrNull().orEmpty()
@@ -558,29 +629,92 @@ class RealLiveRosterRepository(
             }
             val memberLocation = members[pdgaNumber]?.let { listOfNotNull(it.city, it.stateProv ?: it.country).joinToString(", ").ifEmpty { null } }
             val profile = PdgaApiProfile(memberLocation, stats.orEmpty())
-            mergeApiProfile(target.division, target.player.id, profile)
+            fallback.apiProfiles[pdgaNumber] = profile
+            mergeFallbackProfile(target.division, target.player, fallback)
             if (stats != null) profileCacheRepository.saveApi(tournamentId, pdgaNumber, profile)
             if (index < targets.size - 1) delay(API_FALLBACK_DELAY_MS)
         }
     }
 
-    private suspend fun mergeApiProfile(division: String, playerId: String, profile: PdgaApiProfile) {
-        val note = bioNotesRepository.getNote(playerId)
+    /** Fills the season results library (see [SeasonResultsRepository]) with every completed event
+     *  of the last 12 months in the loaded event's country that it doesn't already hold, most
+     *  recent first, so each blocked player's last event shows as early as possible. One public
+     *  event page per event, paced at pdga.com's Crawl-delay; a finished event never needs reading
+     *  again, so only the very first run is slow. Returns true if pdga.com started blocking event
+     *  pages too. */
+    private suspend fun syncSeasonResults(
+        countryName: String?,
+        targets: List<FallbackTarget>,
+        fallback: FallbackState,
+        wakeLock: PowerManager.WakeLock?,
+    ): Boolean {
+        val countryCode = isoCountryCode(countryName) ?: return false
+        val today = isoDate(Calendar.getInstance())
+        val fetched = seasonResultsRepository.fetchedEventIds()
+        val missing = pdgaRepository.fetchEventsInCountry(countryCode, seasonStartDate(), today, MAX_SEASON_EVENTS)
+            .getOrNull().orEmpty()
+            // Only events that have actually finished — today's may still be in progress.
+            .filter { it.endDate.isNotEmpty() && it.endDate < today && it.tournamentId !in fetched }
+            .sortedByDescending { it.endDate }
+        if (missing.isEmpty()) return false
+
+        val targetsByNumber = targets.groupBy { it.player.pdga.pdgaNumber }
+        wakeLock?.acquire(missing.size * (PROFILE_PREFETCH_DELAY_MS + 20_000L) + 30_000L)
+        for ((index, event) in missing.withIndex()) {
+            _profilePrefetchStatus.value = "pdga.com blocked — reading season results… (${index + 1}/${missing.size} events)"
+            // Before every request, including the first: the last profile page request may have
+            // been only moments ago, and it's the same host.
+            delay(PROFILE_PREFETCH_DELAY_MS)
+            val placements = try {
+                eventResultsScraper.fetchResults(event.tournamentId)
+            } catch (e: PdgaProfileBlockedException) {
+                return true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // One event's page failing (network, odd markup) shouldn't stop the rest; it's
+                // left unsaved, so the next load tries it again.
+                continue
+            }
+            seasonResultsRepository.saveEvent(event.tournamentId, event.tournamentName, event.endDate, placements)
+            placements.forEach { placement ->
+                val players = targetsByNumber[placement.pdgaNumber] ?: return@forEach
+                fallback.seasonResults.getOrPut(placement.pdgaNumber) { mutableListOf() } += SeasonResult(
+                    tournamentId = event.tournamentId,
+                    eventName = event.tournamentName,
+                    endDate = event.endDate,
+                    pdgaNumber = placement.pdgaNumber,
+                    division = placement.division,
+                    place = placement.place,
+                    points = placement.points,
+                    prizeUsd = placement.prizeUsd,
+                )
+                players.forEach { mergeFallbackProfile(it.division, it.player, fallback) }
+            }
+        }
+        return false
+    }
+
+    private suspend fun mergeFallbackProfile(division: String, player: Player, fallback: FallbackState) {
+        val pdgaNumber = player.pdga.pdgaNumber
+        val api = fallback.apiProfiles[pdgaNumber]
+        val season = fallback.seasonResults[pdgaNumber]?.let { seasonProfileFrom(it) }
+        val note = bioNotesRepository.getNote(player.id)
         val customBio = note?.bio?.takeIf { it.isNotBlank() }
-        val memberLocation = profile.memberLocation
-        val stats = profile.stats
         _rosters.update { current ->
             val roster = current[division] ?: return@update current
             val updatedGroups = roster.groups.map { group ->
                 group.copy(
                     players = group.players.map { p ->
-                        if (p.id != playerId) {
+                        if (p.id != player.id) {
                             p
                         } else {
-                            val homeLocation = p.pdga.homeLocation ?: memberLocation
+                            val homeLocation = p.pdga.homeLocation ?: api?.memberLocation
                             p.copy(
                                 pdga = p.pdga.copy(homeLocation = homeLocation),
-                                bio = customBio ?: describePlayerFromApi(homeLocation, stats) ?: p.bio,
+                                recentResult = season?.recentResult ?: p.recentResult,
+                                lastWin = season?.lastWin ?: p.lastWin,
+                                bio = customBio ?: describePlayerFromApi(homeLocation, api?.stats.orEmpty(), season) ?: p.bio,
                                 hasCustomNotes = customBio != null,
                             )
                         }

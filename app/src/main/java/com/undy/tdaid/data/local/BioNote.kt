@@ -65,17 +65,25 @@ interface BioNoteDao {
 }
 
 @Database(
-    entities = [BioNoteEntity::class, PlayerProfileCacheEntity::class, PlayerApiProfileCacheEntity::class, CheckInEntity::class],
-    version = 8,
+    entities = [
+        BioNoteEntity::class,
+        PlayerProfileCacheEntity::class,
+        PlayerApiProfileCacheEntity::class,
+        CheckInEntity::class,
+        SeasonEventEntity::class,
+        SeasonResultEntity::class,
+    ],
+    version = 9,
     exportSchema = true,
     // The app has shipped, so a schema change must not fall through to the destructive
-    // migration below and wipe a TD's bio notes and check-ins — 7→8 only adds a table.
-    autoMigrations = [AutoMigration(from = 7, to = 8)],
+    // migration below and wipe a TD's bio notes and check-ins — 7→8 and 8→9 only add tables.
+    autoMigrations = [AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bioNoteDao(): BioNoteDao
     abstract fun playerProfileCacheDao(): PlayerProfileCacheDao
     abstract fun checkInDao(): CheckInDao
+    abstract fun seasonResultsDao(): SeasonResultsDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null

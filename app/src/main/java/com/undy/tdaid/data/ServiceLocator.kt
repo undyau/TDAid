@@ -6,6 +6,7 @@ import com.undy.tdaid.data.local.BioNotesRepository
 import com.undy.tdaid.data.local.RoomBioNotesRepository
 import com.undy.tdaid.data.local.RoomCheckInRepository
 import com.undy.tdaid.data.local.RoomPlayerProfileCacheRepository
+import com.undy.tdaid.data.local.RoomSeasonResultsRepository
 import com.undy.tdaid.data.prefs.DataStoreSettingsRepository
 import com.undy.tdaid.data.prefs.SettingsRepository
 import com.undy.tdaid.data.repo.AdgRepository
@@ -49,6 +50,7 @@ object ServiceLocator {
             settingsRepository,
             bioNotesRepository,
             checkInRepository,
+            RoomSeasonResultsRepository(database.seasonResultsDao()),
             context.applicationContext,
         )
     }

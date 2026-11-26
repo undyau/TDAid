@@ -45,10 +45,11 @@ data class PdgaPlayerProfile(
     val bestResultThisYear: String?,
 )
 
-/** pdga.com answered with its Cloudflare bot check instead of the profile page — confirmed live
- *  (Nov 2026): an HTTP 403 "Just a moment..." interstitial for every player. That's a site-wide
- *  block, not a per-player problem, so callers should stop fetching rather than wait out the
- *  crawl delay for each remaining player only to be blocked again. */
+/** pdga.com answered with its Cloudflare bot check instead of the page — confirmed live (Nov
+ *  2026) for every player profile page: an HTTP 403 "Just a moment..." interstitial. That's a
+ *  block on the whole kind of page, not a per-player (or per-event, see
+ *  [PdgaEventResultsScraper]) problem, so callers should stop fetching rather than wait out the
+ *  crawl delay for each remaining page only to be blocked again. */
 class PdgaProfileBlockedException(message: String) : Exception(message)
 
 /** There's no documented API for member-since or results — this scrapes the same public profile

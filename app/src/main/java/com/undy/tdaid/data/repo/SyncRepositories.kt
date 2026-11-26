@@ -33,6 +33,8 @@ interface PdgaRepository {
     suspend fun fetchPlayers(pdgaNumbers: List<String>): Result<List<PdgaApiPlayer>>
     /** One player's real season stats for [year] — needs a PDGA login. */
     suspend fun fetchPlayerStatistics(pdgaNumber: String, year: Int): Result<List<PdgaApiPlayerStats>>
+    /** Real events in a country between two YYYY-MM-DD dates — needs a PDGA login. */
+    suspend fun fetchEventsInCountry(countryCode: String, startDate: String, endDate: String, maxEvents: Int): Result<List<PdgaEventResult>>
 }
 
 class RealPdgaRepository(
@@ -86,6 +88,16 @@ class RealPdgaRepository(
     override suspend fun fetchPlayerStatistics(pdgaNumber: String, year: Int): Result<List<PdgaApiPlayerStats>> = runCatching {
         val activeSession = session ?: error("Not logged in to PDGA")
         client.fetchPlayerStatistics(activeSession, pdgaNumber, year)
+    }
+
+    override suspend fun fetchEventsInCountry(
+        countryCode: String,
+        startDate: String,
+        endDate: String,
+        maxEvents: Int,
+    ): Result<List<PdgaEventResult>> = runCatching {
+        val activeSession = session ?: error("Not logged in to PDGA")
+        client.fetchEventsInCountry(activeSession, countryCode, startDate, endDate, maxEvents)
     }
 }
 

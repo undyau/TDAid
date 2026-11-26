@@ -71,6 +71,8 @@ data class PdgaEventMeta(
     val divisions: List<PdgaDivisionMeta>,
     val latestRound: Int,
     val courses: List<PdgaCourseMeta>,
+    /** The event's country as PDGA Live names it, e.g. "Australia" — null if not published. */
+    val country: String? = null,
 )
 
 /** One division/round's real tee times plus the specific course(s) that division actually played —
@@ -167,22 +169,30 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                 } catch (e: Exception) {
                     throw PdgaApiException("Unexpected event search response: ${text.take(200)}")
                 }
-                val events = json.optJSONArray("events") ?: return@use emptyList()
-                (0 until events.length()).map { i ->
-                    val e = events.getJSONObject(i)
-                    PdgaEventResult(
-                        tournamentId = e.optString("tournament_id").trim(),
-                        tournamentName = e.optString("tournament_name").trim(),
-                        city = e.optString("city").trim().ifEmpty { null },
-                        stateProv = e.optString("state_prov").trim().ifEmpty { null },
-                        country = e.optString("country").trim().ifEmpty { null },
-                        startDate = e.optString("start_date").trim(),
-                        endDate = e.optString("end_date").trim(),
-                        tier = e.optString("tier").trim().ifEmpty { null },
-                    )
-                }
+                parseEvents(json)
             }
         }
+
+    /** Every real event in [countryCode] (two-letter code) that starts or ends between [startDate]
+     *  and [endDate] (both YYYY-MM-DD), paged through the API's 200-per-request cap — at most
+     *  [maxEvents], so a country with a huge calendar can't turn this into hundreds of requests. */
+    suspend fun fetchEventsInCountry(
+        session: PdgaSession,
+        countryCode: String,
+        startDate: String,
+        endDate: String,
+        maxEvents: Int,
+    ): List<PdgaEventResult> = withContext(Dispatchers.IO) {
+        val events = mutableListOf<PdgaEventResult>()
+        while (events.size < maxEvents) {
+            val url = "$BASE_URL/services/json/event?country=$countryCode&start_date=$startDate&end_date=$endDate" +
+                "&limit=200&offset=${events.size}"
+            val page = parseEvents(getAuthed(session, url, "Event listing"))
+            events += page
+            if (page.size < 200) break
+        }
+        events.take(maxEvents)
+    }
 
     /** Real, unauthenticated tee-time/pairings data for one division/round of a tournament —
      *  found via the browser Network tab (`live_results_fetch_round`), since it's not part of
@@ -252,7 +262,12 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
                 )
             }
             val courses = parseCourses(data.optJSONArray("Layouts"))
-            PdgaEventMeta(divisions = divisions, latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1), courses = courses)
+            PdgaEventMeta(
+                divisions = divisions,
+                latestRound = data.optInt("LatestRound", 1).coerceAtLeast(1),
+                courses = courses,
+                country = if (data.has("Country") && !data.isNull("Country")) data.optString("Country").trim().ifEmpty { null } else null,
+            )
         }
     }
 
@@ -309,6 +324,23 @@ class PdgaApiClient(private val client: OkHttpClient = OkHttpClient()) {
         }).distinctBy { it.courseId }
 
     companion object {
+        private fun parseEvents(json: JSONObject): List<PdgaEventResult> {
+            val events = json.optJSONArray("events") ?: return emptyList()
+            return (0 until events.length()).map { i ->
+                val e = events.getJSONObject(i)
+                PdgaEventResult(
+                    tournamentId = e.optString("tournament_id").trim(),
+                    tournamentName = e.optString("tournament_name").trim(),
+                    city = e.optString("city").trim().ifEmpty { null },
+                    stateProv = e.optString("state_prov").trim().ifEmpty { null },
+                    country = e.optString("country").trim().ifEmpty { null },
+                    startDate = e.optString("start_date").trim(),
+                    endDate = e.optString("end_date").trim(),
+                    tier = e.optString("tier").trim().ifEmpty { null },
+                )
+            }
+        }
+
         /** Internal (rather than private) so it can be unit tested against a documented response
          *  without a network call. */
         internal fun parsePlayers(json: JSONObject): List<PdgaApiPlayer> {

@@ -20,6 +20,19 @@ class DescribePlayerFromApiTest {
     }
 
     @Test
+    fun `lists three or more divisions naturally, most played first`() {
+        val stats = listOf(
+            PdgaApiPlayerStats(year = 2026, divisionCode = "FA3", tournaments = 7, prize = 0.0),
+            PdgaApiPlayerStats(year = 2026, divisionCode = "FA40", tournaments = 11, prize = 0.0),
+            PdgaApiPlayerStats(year = 2026, divisionCode = "FA4", tournaments = 3, prize = 0.0),
+        )
+        assertEquals(
+            "From Cambrian Hill, VIC · 21 PDGA events in 2026 · played FA40, FA3 & FA4.",
+            describePlayerFromApi("Cambrian Hill, VIC", stats),
+        )
+    }
+
+    @Test
     fun `leaves out prize money for an amateur who never won cash`() {
         val stats = listOf(PdgaApiPlayerStats(year = 2026, divisionCode = "MA2", tournaments = 1, prize = 0.0))
         assertEquals("1 PDGA event in 2026.", describePlayerFromApi(null, stats))

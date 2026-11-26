@@ -95,8 +95,14 @@ internal fun describePlayerFromApi(homeLocation: String?, stats: List<PdgaApiPla
         facts.add("$events PDGA event${if (events == 1) "" else "s"} in $season")
         val prize = seasonStats.sumOf { it.prize }.roundToInt()
         if (prize > 0) facts.add("${"$"}${NumberFormat.getIntegerInstance(Locale.US).format(prize)} prize money in $season")
-        val divisions = seasonStats.map { it.divisionCode }.filter { it.isNotBlank() }.distinct()
-        if (divisions.size > 1) facts.add("played ${divisions.joinToString(" & ")}")
+        // Most-played first, read as a natural list: "played FA40, FA3 & FA4".
+        val divisions = seasonStats
+            .filter { it.divisionCode.isNotBlank() }
+            .groupBy { it.divisionCode }
+            .entries
+            .sortedByDescending { (_, rows) -> rows.sumOf { it.tournaments } }
+            .map { it.key }
+        if (divisions.size > 1) facts.add("played ${divisions.dropLast(1).joinToString(", ")} & ${divisions.last()}")
     }
     return facts.takeIf { it.isNotEmpty() }?.joinToString(" · ")?.plus(".")
 }
